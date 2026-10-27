@@ -32,6 +32,7 @@ export class Preview {
   private controls: OrbitControls;
   private group = new THREE.Group();
   private framedWidth = 0;
+  private resizeObserver: ResizeObserver;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -49,7 +50,8 @@ export class Preview {
     this.scene.add(key);
     this.scene.add(this.group);
 
-    new ResizeObserver(() => this.resize()).observe(container);
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(container);
     this.resize();
     this.renderer.setAnimationLoop(() => {
       this.controls.update();
@@ -62,12 +64,7 @@ export class Preview {
   }
 
   update(parts: PreviewPart[], width: number) {
-    for (const child of [...this.group.children]) {
-      const mesh = child as THREE.Mesh;
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
-      this.group.remove(mesh);
-    }
+    this.clear();
     for (const part of parts) {
       const material = new THREE.MeshStandardMaterial({
         color: part.color,
@@ -77,6 +74,24 @@ export class Preview {
       this.group.add(new THREE.Mesh(toGeometry(part.manifold), material));
     }
     if (width !== this.framedWidth) this.frame(width);
+  }
+
+  dispose() {
+    this.renderer.setAnimationLoop(null);
+    this.resizeObserver.disconnect();
+    this.controls.dispose();
+    this.clear();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
+  }
+
+  private clear() {
+    for (const child of [...this.group.children]) {
+      const mesh = child as THREE.Mesh;
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      this.group.remove(mesh);
+    }
   }
 
   /** Point the camera at a label of the given width, slightly from below the front. */

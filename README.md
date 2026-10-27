@@ -33,9 +33,11 @@ npm test        # geometry and export tests
 npm run build   # static site in dist/
 ```
 
-Stack: TypeScript, Vite, [manifold-3d](https://github.com/elalish/manifold) (WASM) for solid
+Stack: TypeScript, React, Vite, [manifold-3d](https://github.com/elalish/manifold) (WASM) for solid
 geometry, [opentype.js](https://opentype.js.org) for fonts, [three.js](https://threejs.org) for
-the preview and [fflate](https://github.com/101arrowz/fflate) for zipping 3MF files.
+the preview and [fflate](https://github.com/101arrowz/fflate) for zipping 3MF files. The geometry
+and export code in `src/` (`cullenect.ts`, `text.ts`, `label.ts`, `export.ts`, `preview.ts`) has no
+React dependency; the UI lives in `App.tsx`, `components/` and the `use*.ts` hooks.
 
 ### Deploying
 
