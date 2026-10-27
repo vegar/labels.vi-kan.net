@@ -14,7 +14,8 @@ export interface BuildResult {
  * geometry, so changing them does not trigger a rebuild.
  */
 export function useLabel(engine: Engine | undefined, state: LabelState): BuildResult {
-  const { units, ribs, text, align, maxCapHeight, margin, style, textDepth, weight } = state;
+  const { units, ribs, text, align, maxCapHeight, margin, style, textDepth, symbols, symbolPosition, symbolSize, weight } =
+    state;
 
   const result = useMemo<BuildResult>(() => {
     if (!engine) return {};
@@ -29,12 +30,29 @@ export function useLabel(engine: Engine | undefined, state: LabelState): BuildRe
         margin,
         style,
         textDepth,
+        symbols,
+        symbolPosition,
+        symbolSize,
       });
       return { parts, ms: Math.round(performance.now() - started) };
     } catch (err) {
       return { error: String(err) };
     }
-  }, [engine, units, ribs, text, align, maxCapHeight, margin, style, textDepth, weight]);
+  }, [
+    engine,
+    units,
+    ribs,
+    text,
+    align,
+    maxCapHeight,
+    margin,
+    style,
+    textDepth,
+    symbols,
+    symbolPosition,
+    symbolSize,
+    weight,
+  ]);
 
   // Manifolds live in WASM memory and must be freed by hand. Free the previous
   // build once a new one has been committed, so nothing still renders it.
@@ -44,6 +62,7 @@ export function useLabel(engine: Engine | undefined, state: LabelState): BuildRe
     if (old && old !== result.parts) {
       old.base.delete();
       old.text?.delete();
+      old.symbols?.delete();
     }
     previous.current = result.parts;
   }, [result.parts]);
