@@ -55,13 +55,15 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
     setSymbols(next);
   };
   // One drive at a time, plus an optional security pin (like Torx TR).
-  const toggleDrive = (i: number, drive: Drive) => {
+  // Picking the selected drive again removes it.
+  const pickDrive = (i: number, drive: Drive) => {
     const drives = symbols[i].drives ?? [];
-    const pin = drives.includes("security");
-    let next: Drive[];
-    if (drive === "security") next = pin ? drives.filter((d) => d !== "security") : [...drives, "security"];
-    else next = [...(drives.includes(drive) ? [] : [drive]), ...(pin ? (["security"] as Drive[]) : [])];
-    patch(i, { drives: next });
+    const pin = drives.includes("security") ? (["security"] as Drive[]) : [];
+    patch(i, { drives: [...(drives.includes(drive) ? [] : [drive]), ...pin], hexHead: false });
+  };
+  const toggleSecurity = (i: number, on: boolean) => {
+    const drives = (symbols[i].drives ?? []).filter((d) => d !== "security");
+    patch(i, { drives: on ? [...drives, "security"] : drives });
   };
 
   return (
@@ -114,18 +116,56 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                     </div>
                   </div>
 
-                  {info.headShapes && (
-                    <div className="chips" role="group" aria-label="Head">
-                      {info.headShapes.map((h) => (
-                        <button
-                          key={h}
-                          type="button"
-                          aria-pressed={(sym.headShape ?? "pan") === h}
-                          onClick={() => patch(i, { headShape: h })}
-                        >
-                          {HEAD_LABELS[h]}
-                        </button>
-                      ))}
+                  {info.drives && (
+                    <div className="field">
+                      <span>Drive</span>
+                      <div className="icon-picker" role="group" aria-label="Drive">
+                        {DRIVES.filter((d) => d.value !== "security").map((d) => (
+                          <button
+                            key={d.value}
+                            type="button"
+                            title={d.label}
+                            aria-pressed={!sym.hexHead && (sym.drives?.includes(d.value) ?? false)}
+                            onClick={() => pickDrive(i, d.value)}
+                          >
+                            {wasm && <SymbolIcon wasm={wasm} symbol={{ kind: "head", drives: [d.value] }} />}
+                          </button>
+                        ))}
+                        {sym.kind === "screw" && (
+                          <button
+                            type="button"
+                            title="Hex head bolt"
+                            aria-pressed={!!sym.hexHead}
+                            onClick={() => patch(i, { hexHead: !sym.hexHead, drives: [] })}
+                          >
+                            {wasm && <SymbolIcon wasm={wasm} symbol={{ kind: "hexhead" }} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {info.headShapes && !sym.hexHead && (
+                    <div className="field">
+                      <span>Head</span>
+                      <div className="icon-picker wide" role="group" aria-label="Head">
+                        {info.headShapes.map((h) => (
+                          <button
+                            key={h}
+                            type="button"
+                            title={HEAD_LABELS[h]}
+                            aria-pressed={(sym.headShape ?? "pan") === h}
+                            onClick={() => patch(i, { headShape: h })}
+                          >
+                            {wasm && (
+                              <SymbolIcon
+                                wasm={wasm}
+                                symbol={{ kind: "bolt", headShape: h, length: 14, tapping: sym.tapping }}
+                              />
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -143,24 +183,19 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                     </label>
                   )}
 
-                  {info.drives && (
-                    <div className="chips" role="group" aria-label="Drive">
-                      {DRIVES.map((d) => (
-                        <button
-                          key={d.value}
-                          type="button"
-                          aria-pressed={sym.drives?.includes(d.value) ?? false}
-                          onClick={() => toggleDrive(i, d.value)}
-                        >
-                          {d.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {info.modifiers && (
+                  {(info.modifiers || info.drives) && (
                     <div className="row">
-                      {info.modifiers.map((m) => (
+                      {info.drives && (
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={sym.drives?.includes("security") ?? false}
+                            onChange={(e) => toggleSecurity(i, e.target.checked)}
+                          />
+                          <span>Security pin</span>
+                        </label>
+                      )}
+                      {info.modifiers?.map((m) => (
                         <label key={m} className="check">
                           <input type="checkbox" checked={!!sym[m]} onChange={(e) => patch(i, { [m]: e.target.checked })} />
                           <span>{MODIFIER_LABELS[m]}</span>

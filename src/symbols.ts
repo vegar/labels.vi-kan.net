@@ -10,6 +10,7 @@ import type { CrossSection, ManifoldToplevel, Vec2 } from "manifold-3d";
  */
 
 export type SymbolKind =
+  | "screw"
   | "head"
   | "hexhead"
   | "bolt"
@@ -55,6 +56,8 @@ export interface LabelSymbol {
   slotted?: boolean;
   /** Flanged head (bolt). */
   flanged?: boolean;
+  /** Hex bolt head instead of a round one (screw). */
+  hexHead?: boolean;
 }
 
 export interface SymbolInfo {
@@ -70,12 +73,20 @@ export interface SymbolInfo {
 
 export const SYMBOLS: SymbolInfo[] = [
   {
+    kind: "screw",
+    name: "Screw",
+    drives: true,
+    headShapes: ["countersunk", "socket", "pan", "round", "wafer"],
+    modifiers: ["tapping", "flanged"],
+    defaults: { kind: "screw", headShape: "countersunk", drives: ["phillips"] },
+  },
+  {
     kind: "cullbolt",
-    name: "Bolt",
+    name: "Cullenect bolt",
     drives: true,
     headShapes: ["pan", "socket", "countersunk", "round"],
     modifiers: ["tapping", "partial", "flip"],
-    defaults: { kind: "cullbolt", headShape: "socket", drives: ["hex"] },
+    defaults: { kind: "cullbolt", headShape: "socket", drives: [] },
   },
   {
     kind: "bolt",
@@ -398,6 +409,27 @@ function cullbolt(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSectio
   return sym.flip ? shape.scale(-1) : shape;
 }
 
+/**
+ * A screw shown as two separate drawings, like label.alch.shop: the head
+ * seen from above with its drive, and the screw from the side.
+ */
+function screw(s: Sketcher, sym: LabelSymbol, height: number): CrossSection {
+  const r = height / 2;
+  const top = sym.hexHead
+    ? withDrives(s, s.ngon(r, 6), sym.drives, r * 0.6, r)
+    : withDrives(s, s.circle(r), sym.drives, r * 0.7, r);
+
+  // The side view is a short bolt of fixed proportions, not drawn to length.
+  const headShape = sym.hexHead ? "socket" : (sym.headShape ?? "countersunk");
+  const width = 1.6 * height;
+  const length = headShape === "countersunk" ? width : width - height / 2.25;
+  const side = bolt(s, { kind: "bolt", headShape, length, tapping: sym.tapping, flanged: sym.flanged }, height, Infinity);
+
+  const gap = height * 0.2;
+  const sideMinX = side.bounds().min[0];
+  return top.translate(-gap / 2 - r, 0).add(side.translate(gap / 2 - sideMinX, 0));
+}
+
 function threadedInsert(s: Sketcher, height: number): CrossSection {
   // Body: wide at the ends, narrow in the middle, with slightly rounded corners.
   const quarter: Vec2[] = [
@@ -448,6 +480,8 @@ export function renderSymbol(
   const h = height;
   const r = h / 2;
   switch (sym.kind) {
+    case "screw":
+      return screw(s, sym, h);
     case "head":
       return withDrives(s, s.circle(r), sym.drives, r * 0.7, r);
     case "hexhead":

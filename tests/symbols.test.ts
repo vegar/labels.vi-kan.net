@@ -45,6 +45,17 @@ describe("renderSymbol", () => {
     expect(secure).toBeGreaterThan(torx);
   });
 
+  it("draws a screw as a head view beside a separate side view", () => {
+    const shape = renderSymbol(wasm, { kind: "screw", headShape: "countersunk", drives: ["phillips"] }, 8);
+    const pieces = shape.decompose().map((p) => p.bounds());
+    const head = pieces.filter((b) => b.max[0] <= 0);
+    const side = pieces.filter((b) => b.min[0] >= 0);
+    expect(head.length + side.length).toBe(pieces.length);
+    expect(head.length).toBeGreaterThan(0);
+    expect(side).toHaveLength(1);
+    expect(side[0].max[0] - side[0].min[0]).toBeCloseTo(8 * 1.6, 3);
+  });
+
   it("draws a bolt to length, and breaks it when it is too long", () => {
     const short = renderSymbol(wasm, { kind: "bolt", headShape: "socket", length: 12 }, 8, 40).bounds();
     expect(short.max[0] - short.min[0]).toBeCloseTo(12 + 8 / 2.25, 3);

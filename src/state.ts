@@ -17,15 +17,20 @@ export const DEFAULT_STATE: LabelState = {
   baseColor: "#1f2328",
   textColor: "#f4f4f0",
   symbolColor: "#f4f4f0",
-  symbols: [{ kind: "cullbolt", headShape: "socket", drives: ["hex"] }],
+  symbols: [{ kind: "screw", headShape: "countersunk", drives: ["phillips"] }],
 };
+
+/** The first release started with this bolt; swap it for the new default. */
+const OLD_DEFAULT_SYMBOLS = JSON.stringify([{ kind: "cullbolt", headShape: "socket", drives: ["hex"] }]);
 
 export function loadState(): LabelState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const state: LabelState = { ...DEFAULT_STATE, ...JSON.parse(saved) };
-      if (!Array.isArray(state.symbols)) state.symbols = DEFAULT_STATE.symbols;
+      if (!Array.isArray(state.symbols) || JSON.stringify(state.symbols) === OLD_DEFAULT_SYMBOLS) {
+        state.symbols = DEFAULT_STATE.symbols;
+      }
       return state;
     }
   } catch {
