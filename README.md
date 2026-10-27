@@ -7,14 +7,18 @@ there is no server.
 Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
 [gflabel](https://github.com/ndevenish/gflabel).
 
-## What it does (v1)
+## What it does
 
 - **Cullenect labels** ([Cullen J Webb's swappable label system](https://makerworld.com/en/models/446624)),
   1U to 3U wide (36, 78 or 120 × 11 mm), with optional snap-fit channels on 1U labels.
 - One or more lines of text, auto-shrunk to fit, left/center/right aligned, Open Sans regular or bold.
 - **Flush** (text inlaid level with the surface, for multi-colour printing) or **raised** text.
-- Live 3D preview with label and text colours.
-- **3MF export** with the label and the text as two parts of one object, so you can
+- **Fastener symbols** ported from gflabel: bolts (Cullenect-style with drive, or drawn to length
+  with a broken shaft when too long), screw heads with drives (hex, Phillips, Pozidriv, Torx, slot,
+  square, cross, triangle, security pin), hex head, nut, nut and lock nut side profiles, square nut,
+  T-nut, washer, lock washer and threaded insert. Symbols sit in a row left or right of the text.
+- Live 3D preview with label, text and symbol colours.
+- **3MF export** with the label, the text and the symbols as parts of one object, so you can
   assign a filament to each in Bambu Studio, OrcaSlicer or PrusaSlicer. STL export as a zip of
   one file per part.
 
@@ -36,7 +40,7 @@ npm run build   # static site in dist/
 Stack: TypeScript, React, Vite, [manifold-3d](https://github.com/elalish/manifold) (WASM) for solid
 geometry, [opentype.js](https://opentype.js.org) for fonts, [three.js](https://threejs.org) for
 the preview and [fflate](https://github.com/101arrowz/fflate) for zipping 3MF files. The geometry
-and export code in `src/` (`cullenect.ts`, `text.ts`, `label.ts`, `export.ts`, `preview.ts`) has no
+and export code in `src/` (`cullenect.ts`, `symbols.ts`, `text.ts`, `label.ts`, `export.ts`, `preview.ts`) has no
 React dependency; the UI lives in `App.tsx`, `components/` and the `use*.ts` hooks.
 
 ### Deploying
@@ -47,7 +51,6 @@ For the `labels.vi-kan.net` domain, add it under **Settings → Pages → Custom
 
 ## Roadmap
 
-- Fastener symbols (screw heads and drives, bolts, nuts, washers)
 - Several labels at once on a print plate, exported as one slicer project
 - More label holders from gflabel (pred, modern, predbox, tailorbox)
 

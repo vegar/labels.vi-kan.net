@@ -7,10 +7,11 @@ interface Props {
   width: number;
   baseColor: string;
   textColor: string;
+  symbolColor: string;
 }
 
 /** React wrapper around the three.js preview. */
-export function PreviewCanvas({ parts, width, baseColor, textColor }: Props) {
+export function PreviewCanvas({ parts, width, baseColor, textColor, symbolColor }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const preview = useRef<Preview>(null);
 
@@ -34,10 +35,11 @@ export function PreviewCanvas({ parts, width, baseColor, textColor }: Props) {
       [
         { manifold: parts.base, color: baseColor },
         ...(parts.text ? [{ manifold: parts.text, color: textColor }] : []),
+        ...(parts.symbols ? [{ manifold: parts.symbols, color: symbolColor }] : []),
       ],
       width,
     );
-  }, [parts, width, baseColor, textColor]);
+  }, [parts, width, baseColor, textColor, symbolColor]);
 
   return <div id="preview" ref={container} />;
 }

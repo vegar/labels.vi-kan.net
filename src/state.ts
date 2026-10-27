@@ -6,6 +6,7 @@ export interface LabelState extends LabelOptions {
   weight: Weight;
   baseColor: string;
   textColor: string;
+  symbolColor: string;
 }
 
 const STORAGE_KEY = "gridfinity-labels:v1";
@@ -15,12 +16,18 @@ export const DEFAULT_STATE: LabelState = {
   weight: "bold",
   baseColor: "#1f2328",
   textColor: "#f4f4f0",
+  symbolColor: "#f4f4f0",
+  symbols: [{ kind: "cullbolt", headShape: "socket", drives: ["hex"] }],
 };
 
 export function loadState(): LabelState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { ...DEFAULT_STATE, ...JSON.parse(saved) };
+    if (saved) {
+      const state: LabelState = { ...DEFAULT_STATE, ...JSON.parse(saved) };
+      if (!Array.isArray(state.symbols)) state.symbols = DEFAULT_STATE.symbols;
+      return state;
+    }
   } catch {
     // Storage can be unavailable (private windows, blocked site data).
   }

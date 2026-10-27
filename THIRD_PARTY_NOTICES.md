@@ -2,7 +2,7 @@
 
 ## gflabel
 
-The Cullenect label geometry in `src/cullenect.ts` is ported from gflabel, https://github.com/ndevenish/gflabel
+The Cullenect label geometry in `src/cullenect.ts` and the fastener symbols in `src/symbols.ts` are ported from gflabel, https://github.com/ndevenish/gflabel
 
 ```
 Copyright (c) 2024 Nicholas Devenish

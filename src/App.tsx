@@ -7,6 +7,7 @@ import { useEngine } from "./useEngine";
 import { useLabel } from "./useLabel";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 import { Segmented } from "./components/Segmented";
+import { SymbolEditor } from "./components/SymbolEditor";
 
 /** Below this letter height, text gets hard to read with a 0.4 mm nozzle. */
 const MIN_LEGIBLE_CAP_HEIGHT = 4.4;
@@ -44,13 +45,16 @@ export function App() {
         ? "Loading…"
         : parts.capHeight
           ? `Letter height ${parts.capHeight.toFixed(1)} mm · built in ${ms} ms`
-          : "No text yet";
+          : parts.symbols
+            ? `Built in ${ms} ms`
+            : "No text yet";
 
   const exportParts = (): ExportPart[] =>
     parts
       ? [
           { name: "label", manifold: parts.base, color: state.baseColor },
           ...(parts.text ? [{ name: "text", manifold: parts.text, color: state.textColor }] : []),
+          ...(parts.symbols ? [{ name: "symbols", manifold: parts.symbols, color: state.symbolColor }] : []),
         ]
       : [];
 
@@ -148,6 +152,14 @@ export function App() {
           )}
         </section>
 
+        <SymbolEditor
+          wasm={engine?.wasm}
+          symbols={state.symbols}
+          position={state.symbolPosition}
+          size={state.symbolSize}
+          onChange={update}
+        />
+
         <section>
           <h2>Print style</h2>
           <Segmented
@@ -160,7 +172,7 @@ export function App() {
           />
           <p className="hint">
             {state.style === "embedded"
-              ? "Text is flush with the surface. Print face up and assign a second filament to the text part."
+              ? "Text is flush with the surface. Print face up and assign filaments to the text and symbol parts."
               : "Text stands proud of the surface. Works with a filament swap at the text layer, or as a second part."}
           </p>
           <label className="field">
@@ -184,6 +196,14 @@ export function App() {
             <label className="color">
               <input type="color" value={state.textColor} onChange={(e) => update({ textColor: e.target.value })} />
               <span>Text</span>
+            </label>
+            <label className="color">
+              <input
+                type="color"
+                value={state.symbolColor}
+                onChange={(e) => update({ symbolColor: e.target.value })}
+              />
+              <span>Symbols</span>
             </label>
           </div>
         </section>
@@ -217,6 +237,7 @@ export function App() {
           width={widthForUnits(state.units)}
           baseColor={state.baseColor}
           textColor={state.textColor}
+          symbolColor={state.symbolColor}
         />
         <div className="status">{status}</div>
       </section>

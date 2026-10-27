@@ -243,3 +243,132 @@ footer a {
     padding: 16px;
   }
 }
+
+.symbol-palette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.symbol-palette button {
+  font: inherit;
+  font-size: 0.72rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.15;
+}
+
+.symbol-palette button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.symbol-palette .symbol-icon {
+  height: 22px;
+  width: 100%;
+}
+
+.symbol-icon {
+  fill: currentColor;
+  flex: none;
+}
+
+.symbol-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.symbol-list li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.symbol-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.symbol-head .symbol-icon {
+  height: 20px;
+  width: 36px;
+}
+
+.symbol-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.symbol-actions button {
+  font: inherit;
+  font-size: 0.85rem;
+  width: 28px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.symbol-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chips button {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chips button[aria-pressed="true"] {
+  background: var(--pressed);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+input[type="number"] {
+  font: inherit;
+  width: 72px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
