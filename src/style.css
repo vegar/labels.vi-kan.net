@@ -333,29 +333,6 @@ footer a {
   cursor: default;
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.chips button {
-  font: inherit;
-  font-size: 0.78rem;
-  padding: 3px 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.chips button[aria-pressed="true"] {
-  background: var(--pressed);
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
 
 .field.inline {
   flex-direction: row;
@@ -371,4 +348,38 @@ input[type="number"] {
   border-radius: 6px;
   background: var(--bg);
   color: var(--text);
+}
+
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.icon-picker button {
+  width: 38px;
+  height: 34px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.icon-picker.wide button {
+  width: 50px;
+}
+
+.icon-picker .symbol-icon {
+  width: 100%;
+  height: 100%;
+}
+
+.icon-picker button[aria-pressed="true"] {
+  background: var(--pressed);
+  border-color: var(--accent);
+  color: var(--accent);
 }

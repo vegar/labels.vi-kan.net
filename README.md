@@ -13,6 +13,8 @@ Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
   1U to 3U wide (36, 78 or 120 × 11 mm), with optional snap-fit channels on 1U labels.
 - One or more lines of text, auto-shrunk to fit, left/center/right aligned, Open Sans regular or bold.
 - **Flush** (text inlaid level with the surface, for multi-colour printing) or **raised** text.
+- **Screw symbol** in the style of label.alch.shop: the drive seen from above, next to a separate
+  side view of the head type (countersunk, socket, pan, round, wafer, hex bolt, self-tapping).
 - **Fastener symbols** ported from gflabel: bolts (Cullenect-style with drive, or drawn to length
   with a broken shaft when too long), screw heads with drives (hex, Phillips, Pozidriv, Torx, slot,
   square, cross, triangle, security pin), hex head, nut, nut and lock nut side profiles, square nut,
