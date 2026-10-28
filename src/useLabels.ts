@@ -17,8 +17,8 @@ interface Built {
 
 /** Everything that changes a label's geometry. Colours and the id don't. */
 function geometryKey(state: LabelState): string {
-  const { units, ribs, segments, align, maxCapHeight, margin, style, textDepth, symbolSize, weight } = state;
-  return JSON.stringify([units, ribs, segments, align, maxCapHeight, margin, style, textDepth, symbolSize, weight]);
+  const { units, ribs, segments, align, gap, maxCapHeight, margin, style, textDepth, symbolSize, weight } = state;
+  return JSON.stringify([units, ribs, segments, align, gap, maxCapHeight, margin, style, textDepth, symbolSize, weight]);
 }
 
 function build(engine: Engine, state: LabelState): BuildResult {

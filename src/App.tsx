@@ -150,7 +150,13 @@ export function App() {
           </label>
         </section>
 
-        <SegmentEditor wasm={engine?.wasm} segments={state.segments} symbolSize={state.symbolSize} onChange={update} />
+        <SegmentEditor
+          wasm={engine?.wasm}
+          segments={state.segments}
+          gap={state.gap}
+          symbolSize={state.symbolSize}
+          onChange={update}
+        />
 
         <section>
           <h2>Text</h2>

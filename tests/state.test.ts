@@ -56,11 +56,13 @@ describe("parseSession", () => {
       selected: "a",
     });
     const [a, b, c, d, e] = parseSession(saved, null).labels;
-    expect(a.segments).toEqual([screw, nut, text("M3")]);
-    expect(b.segments).toEqual([text("M3"), screw]);
+    // The text grows to fill the width, like it used to.
+    const grown = (t: string) => ({ ...text(t), grow: true });
+    expect(a.segments).toEqual([screw, nut, grown("M3")]);
+    expect(b.segments).toEqual([grown("M3"), screw]);
     expect(c.segments).toEqual([nut]);
-    expect(d.segments).toEqual([text("M5")]);
-    expect(e.segments).toEqual([{ kind: "nut", nutType: "square" }, text("M6")]);
+    expect(d.segments).toEqual([grown("M5")]);
+    expect(e.segments).toEqual([{ kind: "nut", nutType: "square" }, grown("M6")]);
     expect(a).not.toHaveProperty("text");
     expect(a).not.toHaveProperty("symbols");
     expect(a).not.toHaveProperty("symbolPosition");

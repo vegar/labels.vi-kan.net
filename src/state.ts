@@ -53,7 +53,8 @@ function legacySegments({ text, symbols, symbolPosition }: LegacyFields): Segmen
   if (!Array.isArray(symbols) || JSON.stringify(symbols) === OLD_DEFAULT_SYMBOLS) {
     symbols = DEFAULT_STATE.segments.filter((s): s is LabelSymbol => !isText(s));
   }
-  const textSegments: Segment[] = text?.trim() || !symbols.length ? [{ kind: "text", text: text ?? "" }] : [];
+  // The text used to fill the width the symbols left.
+  const textSegments: Segment[] = text?.trim() || !symbols.length ? [{ kind: "text", text: text ?? "", grow: true }] : [];
   return symbolPosition === "right" ? [...textSegments, ...symbols] : [...symbols, ...textSegments];
 }
 
@@ -113,13 +114,13 @@ export function saveSession(session: Session) {
  * so a batch of labels comes out consistent.
  */
 export function blankLabel(template: LabelState): LabelState {
-  const { units, ribs, align, maxCapHeight, margin, style, textDepth, symbolSize } = template;
+  const { units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize } = template;
   const { weight, baseColor, textColor, symbolColor } = template;
   return {
     ...DEFAULT_STATE,
     id: newId(),
     segments: [{ kind: "text", text: "" }],
-    ...{ units, ribs, align, maxCapHeight, margin, style, textDepth, symbolSize },
+    ...{ units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize },
     ...{ weight, baseColor, textColor, symbolColor },
   };
 }
@@ -148,7 +149,7 @@ export function parseCloneTexts(input: string): string[] {
 export function withText(segments: Segment[], text: string): Segment[] {
   const at = segments.findIndex(isText);
   if (at < 0) return [...segments, { kind: "text", text }];
-  return segments.map((s, i) => (i === at ? { kind: "text", text } : s));
+  return segments.map((s, i) => (i === at ? { ...s, text } : s));
 }
 
 /**

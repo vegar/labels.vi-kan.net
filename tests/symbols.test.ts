@@ -150,6 +150,26 @@ describe("labels with symbols", () => {
     expect(sb.max[0]).toBeGreaterThan(tb.max[0]);
   });
 
+  it("packs the row together without growing segments, and spreads it with them", () => {
+    const nut: LabelSymbol = { kind: "nut" };
+    const opts = { ...label(text("M3"), nut), units: 3, gap: 2 };
+    const packed = buildLabel(wasm, font, opts);
+    const [tb, sb] = [packed.text!.boundingBox(), packed.symbols!.boundingBox()];
+    expect(sb.min[0] - tb.max[0]).toBeCloseTo(2, 1);
+    expect(tb.min[0] + sb.max[0]).toBeCloseTo(0, 3);
+    const left = buildLabel(wasm, font, { ...opts, align: "left" }).text!.boundingBox();
+    expect(left.min[0]).toBeCloseTo(-60 + 0.8, 3);
+
+    // A growing text takes the spare width: the nut goes to the right edge.
+    const grown = buildLabel(wasm, font, { ...opts, segments: [{ ...text("M3"), grow: true }, nut] });
+    expect(grown.symbols!.boundingBox().max[0]).toBeCloseTo(60 - 0.8, 3);
+    // Two growing segments share it evenly.
+    const both = buildLabel(wasm, font, { ...opts, segments: [{ ...text("M3"), grow: true }, { ...nut, grow: true }] });
+    const nb = both.symbols!.boundingBox();
+    expect(nb.max[0]).toBeLessThan(60 - 0.8 - 5);
+    expect(nb.min[0]).toBeGreaterThan(both.text!.boundingBox().max[0] + 5);
+  });
+
   it("shrinks a row that is too long to fit", () => {
     const many = Array.from({ length: 12 }, () => bolt);
     const { symbols } = buildLabel(wasm, font, label(...many, text("M3 × 12")));

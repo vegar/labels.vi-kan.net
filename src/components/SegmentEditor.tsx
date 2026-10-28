@@ -264,12 +264,13 @@ function TextIcon() {
 interface Props {
   wasm?: ManifoldToplevel;
   segments: Segment[];
+  gap: number;
   symbolSize: number;
-  onChange: (patch: { segments?: Segment[]; symbolSize?: number }) => void;
+  onChange: (patch: { segments?: Segment[]; gap?: number; symbolSize?: number }) => void;
 }
 
 /** What goes on the label, left to right: any mix of text and symbols. */
-export function SegmentEditor({ wasm, segments, symbolSize, onChange }: Props) {
+export function SegmentEditor({ wasm, segments, gap, symbolSize, onChange }: Props) {
   const setSegments = (next: Segment[]) => onChange({ segments: next });
   const replace = (i: number, seg: Segment) => setSegments(segments.map((s, j) => (j === i ? seg : s)));
   const move = (i: number, by: number) => {
@@ -283,7 +284,10 @@ export function SegmentEditor({ wasm, segments, symbolSize, onChange }: Props) {
   return (
     <section>
       <h2>Content</h2>
-      <p className="hint">Text and symbols, left to right on the label. Add as many as you like.</p>
+      <p className="hint">
+        Text and symbols, left to right on the label. Segments marked Grow share the spare width; without any, the
+        row is packed together.
+      </p>
       <div className="symbol-palette">
         <button type="button" title="Add text" onClick={() => setSegments([...segments, { kind: "text", text: "" }])}>
           <TextIcon />
@@ -310,6 +314,14 @@ export function SegmentEditor({ wasm, segments, symbolSize, onChange }: Props) {
               <div className="symbol-head">
                 {isText(seg) ? <TextIcon /> : wasm && <SymbolIcon wasm={wasm} symbol={seg} />}
                 <strong>{isText(seg) ? "Text" : symbolInfo(seg.kind).name}</strong>
+                <label className="check grow" title="Take a share of the spare width">
+                  <input
+                    type="checkbox"
+                    checked={!!seg.grow}
+                    onChange={(e) => replace(i, { ...seg, grow: e.target.checked })}
+                  />
+                  <span>Grow</span>
+                </label>
                 <div className="symbol-actions">
                   <button type="button" title="Move left" disabled={i === 0} onClick={() => move(i, -1)}>
                     ←
@@ -336,7 +348,7 @@ export function SegmentEditor({ wasm, segments, symbolSize, onChange }: Props) {
                     rows={2}
                     spellCheck={false}
                     value={seg.text}
-                    onChange={(e) => replace(i, { kind: "text", text: e.target.value })}
+                    onChange={(e) => replace(i, { ...seg, text: e.target.value })}
                   />
                 </label>
               ) : (
@@ -345,6 +357,22 @@ export function SegmentEditor({ wasm, segments, symbolSize, onChange }: Props) {
             </li>
           ))}
         </ol>
+      )}
+
+      {segments.length > 1 && (
+        <label className="field">
+          <span>
+            Gap between segments <output>{gap.toFixed(1)} mm</output>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={5}
+            step={0.1}
+            value={gap}
+            onChange={(e) => onChange({ gap: Number(e.target.value) })}
+          />
+        </label>
       )}
 
       {hasSymbols && (

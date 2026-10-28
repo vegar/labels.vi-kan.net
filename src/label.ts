@@ -6,14 +6,19 @@ import { textBlock, type Align } from "./text";
 
 export type LabelStyle = "embedded" | "raised";
 
+interface SegmentOptions {
+  /** Take a share of the spare width. Without any growing segments, the row is packed together. */
+  grow?: boolean;
+}
+
 /** A piece of text on the label. "\n" starts a new line within it. */
-export interface TextSegment {
+export interface TextSegment extends SegmentOptions {
   kind: "text";
   text: string;
 }
 
 /** What goes on the label, left to right: text and symbols in any order. */
-export type Segment = TextSegment | LabelSymbol;
+export type Segment = TextSegment | (LabelSymbol & SegmentOptions);
 
 export function isText(segment: Segment): segment is TextSegment {
   return segment.kind === "text";
@@ -24,10 +29,12 @@ export interface LabelOptions {
   ribs: boolean;
   segments: Segment[];
   /**
-   * Where text sits in the room it is given, and how its lines line up.
-   * With symbols only, where the row sits on the label.
+   * Where the row sits on the label, or each growing segment in its share
+   * of the spare width. Also how the lines of a text line up.
    */
   align: Align;
+  /** Space between segments, in mm. */
+  gap: number;
   maxCapHeight: number;
   margin: number;
   style: LabelStyle;
@@ -42,6 +49,7 @@ export const DEFAULT_OPTIONS: LabelOptions = {
   ribs: true,
   segments: [{ kind: "text", text: "M3 × 12" }],
   align: "center",
+  gap: 1,
   maxCapHeight: 6,
   margin: 0.8,
   style: "embedded",
@@ -77,12 +85,12 @@ function centered(shape: CrossSection): CrossSection {
   return shape.translate(-(min[0] + max[0]) / 2, -(min[1] + max[1]) / 2);
 }
 
-type Item = { text: true; shape: CrossSection } | { text: false; symbol: LabelSymbol };
+type Item = { grow: boolean } & ({ text: true; shape: CrossSection } | { text: false; symbol: LabelSymbol });
 
 /**
  * Lay out the segments in a row across the label's face area. Symbols keep
- * their size; text shares the rest of the width, all at one letter height,
- * and is placed in its share by `align`.
+ * their size and the text fits in the rest, all at one letter height. Spare
+ * width is shared by the growing segments, or left around the row.
  */
 function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
   const areaWidth = widthForUnits(opts.units) - 2 * opts.margin;
@@ -91,10 +99,11 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
   // Text at a cap height of 1 mm; empty text takes no room.
   const items: Item[] = [];
   for (const seg of opts.segments) {
-    if (!isText(seg)) items.push({ text: false, symbol: seg });
+    const grow = !!seg.grow;
+    if (!isText(seg)) items.push({ grow, text: false, symbol: seg });
     else {
       const shape = textBlock(wasm, font, seg.text, opts.align);
-      if (shape) items.push({ text: true, shape });
+      if (shape) items.push({ grow, text: true, shape });
     }
   }
   if (items.length === 0) return {};
@@ -102,11 +111,9 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
   const texts = items.filter((it) => it.text);
   const symbols = items.filter((it) => !it.text);
   const height = Math.min(opts.symbolSize, areaHeight);
-  const symbolGap = height * 0.2;
-  const textGap = Math.max(1, height * 0.15);
-  const gaps = items.slice(1).map((it, i) => (it.text || items[i].text ? textGap : symbolGap));
-  const gapWidth = gaps.reduce((a, b) => a + b, 0);
-  const symbolGapWidth = gaps.filter((_, i) => !items[i].text && !items[i + 1].text).reduce((a, b) => a + b, 0);
+  const gap = Math.max(0, opts.gap);
+  const gapWidth = gap * (items.length - 1);
+  const symbolGapWidth = gap * items.slice(1).filter((it, i) => !it.text && !items[i].text).length;
 
   const textInk = texts.map((it) => size(it.shape));
   const inkWidth = textInk.reduce((a, b) => a + b.width, 0);
@@ -136,25 +143,26 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
   let capHeight = texts.length ? Math.min(maxCap, textRoom / inkWidth) : undefined;
   shapes = shapes.map((s, i) => s.scale(items[i].text ? capHeight! : fit));
 
-  // Spare width goes to the text, shared evenly; with no text it is left
-  // around the row, as `align` says.
+  // Spare width goes to the growing segments, shared evenly; without any,
+  // it is left around the row, as `align` says.
   const widths = shapes.map((s) => size(s).width);
   const total = widths.reduce((a, b) => a + b, 0) + gapWidth;
   const spare = Math.max(0, areaWidth - total);
-  const share = texts.length ? spare / texts.length : 0;
-  const rowWidth = total + share * texts.length;
+  const growing = items.filter((it) => it.grow).length;
+  const share = growing ? spare / growing : 0;
+  const rowWidth = growing ? Math.max(total, areaWidth) : total;
   let x =
-    texts.length || opts.align === "center"
+    growing || opts.align === "center"
       ? -rowWidth / 2
       : opts.align === "left"
         ? -areaWidth / 2
         : areaWidth / 2 - rowWidth;
 
   const placed = shapes.map((s, i) => {
-    const slot = widths[i] + (items[i].text ? share : 0);
-    const pad = !items[i].text ? 0 : opts.align === "left" ? 0 : opts.align === "right" ? share : share / 2;
+    const extra = items[i].grow ? share : 0;
+    const pad = opts.align === "left" ? 0 : opts.align === "right" ? extra : extra / 2;
     const out = s.translate(x + pad + widths[i] / 2, 0);
-    x += slot + (gaps[i] ?? 0);
+    x += widths[i] + extra + gap;
     return out;
   });
 
