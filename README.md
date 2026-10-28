@@ -21,9 +21,10 @@ Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
 - **Nut symbol**: hex nut or lock nut (from above, from the side, or both), square nut or T-nut.
 - More symbols ported from gflabel: a bolt drawn to length (with a broken shaft when too long),
   washer, lock washer and threaded insert. Symbols sit in a row left or right of the text.
-- **Multiple labels** in one session: add, duplicate, remove and switch between labels. A new
-  label keeps the size, print style and colours of the one you were editing. Labels are kept in
-  the browser between visits.
+- **Multiple labels** in one session: add, remove and switch between labels. **Clone** a label
+  with a list of new texts (one per line) to make many matching labels at once. **Add label**
+  makes a blank label that keeps the size, print style and colours of the one you were editing.
+  Labels are kept in the browser between visits.
 - Live 3D preview with label, text and symbol colours.
 - **3MF export** with the label, the text and the symbols as parts of one object, so you can
   assign a filament to each in Bambu Studio, OrcaSlicer or PrusaSlicer. STL export as a zip of

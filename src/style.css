@@ -455,3 +455,57 @@ input[type="number"] {
 .add-label:hover {
   border-color: var(--accent);
 }
+
+.clone-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.clone-dialog::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+.clone-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clone-dialog h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-actions button {
+  font: inherit;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dialog-actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.dialog-actions .primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

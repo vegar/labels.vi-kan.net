@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   addLabel,
   blankLabel,
+  cloneLabel,
   DEFAULT_STATE,
-  duplicateLabel,
   labelTitle,
+  parseCloneTexts,
   parseSession,
   removeLabel,
   updateLabel,
@@ -56,13 +57,18 @@ describe("label list", () => {
     expect(next.labels[1]).toMatchObject({ units: 3, style: "raised", baseColor: "#ff0000", text: "", symbols: [] });
   });
 
-  it("duplicates a label with a new id and selects the copy", () => {
-    const s = updateLabel(session("a", "b"), "b", { text: "M5" });
-    const next = duplicateLabel(s, "b");
-    expect(next.labels).toHaveLength(3);
-    expect(next.labels[2].text).toBe("M5");
-    expect(next.labels[2].id).not.toBe("b");
-    expect(next.selected).toBe(next.labels[2].id);
+  it("clones a label once per text, keeping everything but the text", () => {
+    const s = updateLabel(session("a", "b"), "a", { units: 3, style: "raised", baseColor: "#ff0000", text: "M3 × 12" });
+    const next = cloneLabel(s, "a", ["M3 × 16", "M3 × 20"]);
+    expect(next.labels.map((l) => l.text)).toEqual(["M3 × 12", "M3 × 16", "M3 × 20", DEFAULT_STATE.text]);
+    expect(next.labels[2]).toMatchObject({ units: 3, style: "raised", baseColor: "#ff0000" });
+    expect(new Set(next.labels.map((l) => l.id)).size).toBe(4);
+    expect(next.selected).toBe(next.labels[1].id);
+    expect(cloneLabel(s, "a", [])).toBe(s);
+  });
+
+  it("reads one label per line, with | for a line break", () => {
+    expect(parseCloneTexts("M3 × 16\n\n  M4 | Socket head \n")).toEqual(["M3 × 16", "M4\nSocket head"]);
   });
 
   it("removes a label and selects its neighbour", () => {
