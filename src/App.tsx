@@ -13,7 +13,6 @@ import {
   updateLabel,
   type LabelState,
   type Session,
-  type Weight,
 } from "./state";
 import { useEngine } from "./useEngine";
 import { useLabels } from "./useLabels";
@@ -93,7 +92,8 @@ export function App() {
     if (state.textDepth > maxDepth) update({ textDepth: maxDepth });
   }, [state.textDepth, maxDepth]);
 
-  const shrunk = parts?.capHeight !== undefined && parts.capHeight < MIN_LEGIBLE_CAP_HEIGHT;
+  // Only warn about text the layout made smaller; small text on purpose is fine.
+  const shrunk = !!parts?.shrunk && parts.capHeight! < MIN_LEGIBLE_CAP_HEIGHT;
   const status = engineError
     ? `Could not load the label engine: ${engineError}`
     : buildError
@@ -101,7 +101,7 @@ export function App() {
       : !parts
         ? "Loading…"
         : parts.capHeight
-          ? `Letter height ${parts.capHeight.toFixed(1)} mm · built in ${ms} ms`
+          ? `Smallest letters ${parts.capHeight.toFixed(1)} mm · built in ${ms} ms`
           : parts.symbols
             ? `Built in ${ms} ms`
             : "No text yet";
@@ -184,57 +184,16 @@ export function App() {
           wasm={engine?.wasm}
           segments={state.segments}
           gap={state.gap}
-          symbolSize={state.symbolSize}
+          align={state.align}
           onChange={update}
-        />
-
-        <section>
-          <h2>Text</h2>
-          <div className="row">
-            <div className="field">
-              <span>Align</span>
-              <Segmented
-                value={state.align}
-                options={[
-                  { value: "left", label: "Left" },
-                  { value: "center", label: "Center" },
-                  { value: "right", label: "Right" },
-                ]}
-                onChange={(align) => update({ align })}
-              />
-            </div>
-            <div className="field">
-              <span>Weight</span>
-              <Segmented<Weight>
-                value={state.weight}
-                options={[
-                  { value: "regular", label: "Regular" },
-                  { value: "bold", label: "Bold" },
-                ]}
-                onChange={(weight) => update({ weight })}
-              />
-            </div>
-          </div>
-          <label className="field">
-            <span>
-              Max letter height <output>{state.maxCapHeight.toFixed(1)} mm</output>
-            </span>
-            <input
-              type="range"
-              min={2}
-              max={9}
-              step={0.1}
-              value={state.maxCapHeight}
-              onChange={(e) => update({ maxCapHeight: Number(e.target.value) })}
-            />
-          </label>
+        >
           {shrunk && (
             <p className="hint warn">
               Text was shrunk below {MIN_LEGIBLE_CAP_HEIGHT} mm to fit. That may be hard to read with a 0.4 mm
               nozzle; try fewer characters or a wider label.
             </p>
           )}
-        </section>
+        </SegmentEditor>
 
         <section>
           <h2>Print style</h2>

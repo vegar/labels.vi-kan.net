@@ -5,20 +5,47 @@ import { isVariableWidth, renderSymbol, type LabelSymbol } from "./symbols";
 import { textBlock, type Align } from "./text";
 
 export type LabelStyle = "embedded" | "raised";
+export type Weight = "regular" | "bold";
+export type Fonts = Record<Weight, Font>;
 
 interface SegmentOptions {
   /** Take a share of the spare width. Without any growing segments, the row is packed together. */
   grow?: boolean;
+  /** Where the segment sits in its share when it grows. For text, also how its lines line up. */
+  align: Align;
 }
 
 /** A piece of text on the label. "\n" starts a new line within it. */
 export interface TextSegment extends SegmentOptions {
   kind: "text";
   text: string;
+  weight: Weight;
+  /** Largest capital-letter height, in mm. Text shrinks below this to fit. */
+  maxCapHeight: number;
 }
 
+export type SymbolSegment = LabelSymbol &
+  SegmentOptions & {
+    /** Height in mm. The symbol shrinks below this to fit. */
+    size: number;
+  };
+
 /** What goes on the label, left to right: text and symbols in any order. */
-export type Segment = TextSegment | (LabelSymbol & SegmentOptions);
+export type Segment = TextSegment | SymbolSegment;
+
+export const TEXT_DEFAULTS = { align: "center", weight: "bold", maxCapHeight: 6 } as const satisfies Partial<TextSegment>;
+export const SYMBOL_SIZE = 7;
+
+/** A symbol segment, sized and aligned like `like` if given. */
+export function symbolSegment(symbol: LabelSymbol, like?: SymbolSegment): SymbolSegment {
+  return { ...symbol, align: like?.align ?? "center", size: like?.size ?? SYMBOL_SIZE };
+}
+
+/** A text segment, styled like `like` if given. */
+export function textSegment(text: string, like?: TextSegment): TextSegment {
+  const { align, weight, maxCapHeight } = like ?? TEXT_DEFAULTS;
+  return { kind: "text", text, align, weight, maxCapHeight };
+}
 
 export function isText(segment: Segment): segment is TextSegment {
   return segment.kind === "text";
@@ -29,34 +56,26 @@ export interface LabelOptions {
   units: number;
   ribs: boolean;
   segments: Segment[];
-  /**
-   * Where the row sits on the label, or each growing segment in its share
-   * of the spare width. Also how the lines of a text line up.
-   */
+  /** Where the row sits on the label when nothing grows. */
   align: Align;
   /** Space between segments, in mm. */
   gap: number;
-  maxCapHeight: number;
   margin: number;
   style: LabelStyle;
   /** Depth of embedded text, or height of raised text, in mm. */
   textDepth: number;
-  /** Row height for the symbols, in mm. Symbols shrink below this to fit. */
-  symbolSize: number;
 }
 
 export const DEFAULT_OPTIONS: LabelOptions = {
   base: "cullenect",
   units: 1,
   ribs: true,
-  segments: [{ kind: "text", text: "M3 × 12" }],
+  segments: [textSegment("M3 × 12")],
   align: "center",
   gap: 1,
-  maxCapHeight: 6,
   margin: 0.8,
   style: "embedded",
   textDepth: 0.2,
-  symbolSize: 7,
 };
 
 /** Deepest flush text that still leaves material over the snap-fit channels or below the face. */
@@ -70,7 +89,10 @@ export interface LabelParts {
   text?: Manifold;
   /** Undefined when the label has no symbols. */
   symbols?: Manifold;
+  /** Height of the smallest capital letters on the label, in mm. */
   capHeight?: number;
+  /** True when text came out smaller than its max letter height, to fit. */
+  shrunk?: boolean;
 }
 
 function size(shape: CrossSection): { width: number; height: number } {
@@ -84,14 +106,18 @@ function centered(shape: CrossSection): CrossSection {
   return shape.translate(-(min[0] + max[0]) / 2, -(min[1] + max[1]) / 2);
 }
 
-type Item = { grow: boolean } & ({ text: true; shape: CrossSection } | { text: false; symbol: LabelSymbol });
+type Item = { grow: boolean } & (
+  | { text: true; segment: TextSegment; shape: CrossSection; maxCap: number }
+  | { text: false; symbol: SymbolSegment; height: number }
+);
 
 /**
  * Lay out the segments in a row across the label's face area. Symbols keep
- * their size and the text fits in the rest, all at one letter height. Spare
- * width is shared by the growing segments, or left around the row.
+ * their size and the text fits in the rest, each text shrinking by the same
+ * factor so their sizes stay in proportion. Spare width is shared by the
+ * growing segments, or left around the row.
  */
-function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
+function layoutFace(wasm: ManifoldToplevel, fonts: Fonts, opts: LabelOptions) {
   const area = baseInfo(opts.base).area(opts.units);
   const areaWidth = area.width - 2 * opts.margin;
   const areaHeight = area.height - 2 * opts.margin;
@@ -100,51 +126,54 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
   const items: Item[] = [];
   for (const seg of opts.segments) {
     const grow = !!seg.grow;
-    if (!isText(seg)) items.push({ grow, text: false, symbol: seg });
+    if (!isText(seg)) items.push({ grow, text: false, symbol: seg, height: Math.min(seg.size, areaHeight) });
     else {
-      const shape = textBlock(wasm, font, seg.text, opts.align);
-      if (shape) items.push({ grow, text: true, shape });
+      const shape = textBlock(wasm, fonts[seg.weight], seg.text, seg.align);
+      if (shape) {
+        const maxCap = Math.min(seg.maxCapHeight, areaHeight / size(shape).height);
+        items.push({ grow, text: true, segment: seg, shape, maxCap });
+      }
     }
   }
   if (items.length === 0) return {};
 
   const texts = items.filter((it) => it.text);
   const symbols = items.filter((it) => !it.text);
-  const height = Math.min(opts.symbolSize, areaHeight);
   const gap = Math.max(0, opts.gap);
   const gapWidth = gap * (items.length - 1);
   const symbolGapWidth = gap * items.slice(1).filter((it, i) => !it.text && !items[i].text).length;
 
-  const textInk = texts.map((it) => size(it.shape));
-  const inkWidth = textInk.reduce((a, b) => a + b.width, 0);
-  const maxCap = Math.min(opts.maxCapHeight, ...textInk.map((b) => areaHeight / b.height));
+  // Every text at its largest size, side by side.
+  const naturalText = texts.reduce((w, it) => w + it.maxCap * size(it.shape).width, 0);
 
   // Bolts get whatever the text leaves at its full size, but never less
   // than a third of the label, so they don't collapse to a stub.
   const fixedWidth = symbols
     .filter((it) => !isVariableWidth(it.symbol))
-    .reduce((w, it) => w + size(renderSymbol(wasm, it.symbol, height)).width, 0);
+    .reduce((w, it) => w + size(renderSymbol(wasm, it.symbol, it.height)).width, 0);
   const budget = texts.length
-    ? Math.max(areaWidth - fixedWidth - gapWidth - maxCap * inkWidth, areaWidth / 3)
+    ? Math.max(areaWidth - fixedWidth - gapWidth - naturalText, areaWidth / 3)
     : areaWidth - fixedWidth - gapWidth;
   const variableCount = symbols.filter((it) => isVariableWidth(it.symbol)).length;
   const each = variableCount ? budget / variableCount : 0;
 
-  // Shrink the symbols if they are too tall (the Cullenect bolt is taller
-  // than the row height) or leave too little room for the text.
-  let shapes = items.map((it) => (it.text ? it.shape : centered(renderSymbol(wasm, it.symbol, height, each))));
-  const symbolShapes = shapes.filter((_, i) => !items[i].text);
-  const symbolWidth = symbolShapes.reduce((w, s) => w + size(s).width, 0);
-  const symbolHeight = Math.max(0, ...symbolShapes.map((s) => size(s).height));
+  // Shrink symbols that are too tall (the Cullenect bolt is taller than its
+  // height), then all symbols alike if they leave too little room for the text.
+  const rendered = items.map((it) => (it.text ? it.shape : centered(renderSymbol(wasm, it.symbol, it.height, each))));
+  const tallFit = rendered.map((s, i) => (items[i].text ? 1 : Math.min(1, areaHeight / size(s).height)));
+  const symbolWidth = rendered.reduce((w, s, i) => w + (items[i].text ? 0 : size(s).width * tallFit[i]), 0);
   const symbolRoom = Math.max((texts.length ? areaWidth * 0.7 : areaWidth) - symbolGapWidth, areaWidth * 0.2);
-  const fit = symbols.length ? Math.min(1, areaHeight / symbolHeight, symbolRoom / symbolWidth) : 1;
+  const widthFit = symbols.length ? Math.min(1, symbolRoom / symbolWidth) : 1;
 
-  const textRoom = Math.max(areaWidth - symbolWidth * fit - gapWidth, areaWidth * 0.1);
-  let capHeight = texts.length ? Math.min(maxCap, textRoom / inkWidth) : undefined;
-  shapes = shapes.map((s, i) => s.scale(items[i].text ? capHeight! : fit));
+  const textRoom = Math.max(areaWidth - symbolWidth * widthFit - gapWidth, areaWidth * 0.1);
+  const textFit = texts.length ? Math.min(1, textRoom / naturalText) : 1;
+  const shapes = rendered.map((s, i) => {
+    const it = items[i];
+    return s.scale(it.text ? it.maxCap * textFit : tallFit[i] * widthFit);
+  });
 
   // Spare width goes to the growing segments, shared evenly; without any,
-  // it is left around the row, as `align` says.
+  // the row is packed together and placed by `align`.
   const widths = shapes.map((s) => size(s).width);
   const total = widths.reduce((a, b) => a + b, 0) + gapWidth;
   const spare = Math.max(0, areaWidth - total);
@@ -159,8 +188,10 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
         : areaWidth / 2 - rowWidth;
 
   const placed = shapes.map((s, i) => {
-    const extra = items[i].grow ? share : 0;
-    const pad = opts.align === "left" ? 0 : opts.align === "right" ? extra : extra / 2;
+    const it = items[i];
+    const extra = it.grow ? share : 0;
+    const align = it.text ? it.segment.align : it.symbol.align;
+    const pad = align === "left" ? 0 : align === "right" ? extra : extra / 2;
     const out = s.translate(x + pad + widths[i] / 2, 0);
     x += widths[i] + extra + gap;
     return out;
@@ -172,17 +203,19 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
     const parts = placed.filter((_, i) => items[i].text === keep);
     return parts.length ? wasm.CrossSection.union(parts).scale(overflow) : undefined;
   };
-  if (capHeight !== undefined) capHeight *= overflow;
-  return { text: union(true), symbols: union(false), capHeight };
+  // The smallest letters on the label, to warn when they get hard to read.
+  const capHeight = texts.length ? Math.min(...texts.map((it) => it.maxCap)) * textFit * overflow : undefined;
+  const shrunk = texts.some((it) => it.maxCap * textFit * overflow < it.segment.maxCapHeight - 1e-3);
+  return { text: union(true), symbols: union(false), capHeight, shrunk };
 }
 
 /**
  * Build the label as separate solids (body, text, symbols), so they can be
  * given different colours in the preview and in the exported 3MF.
  */
-export function buildLabel(wasm: ManifoldToplevel, font: Font, opts: LabelOptions): LabelParts {
+export function buildLabel(wasm: ManifoldToplevel, fonts: Fonts, opts: LabelOptions): LabelParts {
   let base = baseInfo(opts.base).body(wasm, { ...opts, raised: opts.style === "raised" });
-  const face = layoutFace(wasm, font, opts);
+  const face = layoutFace(wasm, fonts, opts);
 
   const depth = opts.style === "embedded" ? Math.min(opts.textDepth, maxEmbeddedDepth(opts)) : opts.textDepth;
   // Flush: cut the shape out of the base and fill the hole. Raised: stand it on the face.
@@ -197,5 +230,5 @@ export function buildLabel(wasm: ManifoldToplevel, font: Font, opts: LabelOption
 
   const text = solid(face.text);
   const symbols = solid(face.symbols);
-  return { base, text, symbols, capHeight: face.capHeight };
+  return { base, text, symbols, capHeight: face.capHeight, shrunk: face.shrunk };
 }

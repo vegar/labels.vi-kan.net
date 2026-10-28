@@ -79,7 +79,7 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "A label is a row of segments",
-    text: "Text and symbols can come in any order. Segments marked Grow share the spare width; without any, the row is packed together with a fixed gap (1 mm by default).",
+    text: "Text and symbols can come in any order. Segments marked Grow share the spare width; without any, the row is packed together with a fixed gap (1 mm by default). Each text has its own alignment, weight and letter height, and each symbol its own height, so small bold text can sit next to tall regular text.",
   },
   {
     title: "Flush text for multi-colour",

@@ -17,15 +17,14 @@ interface Built {
 
 /** Everything that changes a label's geometry. Colours and the id don't. */
 function geometryKey(state: LabelState): string {
-  const { base, units, ribs, segments, align, gap, maxCapHeight, margin, style, textDepth, symbolSize, weight } = state;
-  const geometry = [base, units, ribs, segments, align, gap, maxCapHeight, margin, style, textDepth, symbolSize, weight];
-  return JSON.stringify(geometry);
+  const { base, units, ribs, segments, align, gap, margin, style, textDepth } = state;
+  return JSON.stringify([base, units, ribs, segments, align, gap, margin, style, textDepth]);
 }
 
 function build(engine: Engine, state: LabelState): BuildResult {
   const started = performance.now();
   try {
-    const parts = buildLabel(engine.wasm, engine.fonts[state.weight], state);
+    const parts = buildLabel(engine.wasm, engine.fonts, state);
     return { parts, ms: Math.round(performance.now() - started) };
   } catch (err) {
     return { error: String(err) };
