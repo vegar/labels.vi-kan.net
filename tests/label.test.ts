@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../src/manifold";
 import { buildLabel, DEFAULT_OPTIONS } from "../src/label";
-import { to3mf, toStl } from "../src/export";
+import { plateLayout, to3mf, toStl, toStlZip } from "../src/export";
 
 let wasm: ManifoldToplevel;
 const fontData = readFileSync(new URL("../public/fonts/OpenSans-Regular.ttf", import.meta.url));
@@ -73,28 +73,52 @@ describe("export", () => {
     const { base, text } = buildLabel(wasm, font, DEFAULT_OPTIONS);
     const files = unzipSync(
       to3mf("test", [
-        { name: "base", manifold: base, color: "#202020" },
-        { name: "text", manifold: text!, color: "#ffffff" },
+        {
+          name: "label",
+          parts: [
+            { name: "base", manifold: base, color: "#202020" },
+            { name: "text", manifold: text!, color: "#ffffff" },
+          ],
+        },
       ]),
     );
     const model = strFromU8(files["3D/3dmodel.model"]);
     expect(model.match(/<object /g)).toHaveLength(3);
+    expect(model.match(/<item /g)).toHaveLength(1);
     expect(model).toContain('displaycolor="#FFFFFFFF"');
     expect(files["[Content_Types].xml"]).toBeDefined();
   });
 
-  it("assigns each colour its own Bambu filament slot", () => {
-    const { base, text } = buildLabel(wasm, font, DEFAULT_OPTIONS);
+  it("puts every label in the 3MF as its own object", () => {
+    const a = buildLabel(wasm, font, DEFAULT_OPTIONS);
+    const b = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "M4", units: 2 });
     const files = unzipSync(
       to3mf("test", [
-        { name: "base", manifold: base, color: "#202020" },
-        { name: "text", manifold: text!, color: "#FFFFFF" },
-        { name: "symbols", manifold: text!, color: "#ffffff" },
+        {
+          name: "a",
+          parts: [
+            { name: "label", manifold: a.base, color: "#202020" },
+            { name: "text", manifold: a.text!, color: "#ffffff" },
+          ],
+        },
+        {
+          name: "b",
+          parts: [
+            { name: "label", manifold: b.base, color: "#202020" },
+            { name: "text", manifold: b.text!, color: "#ff0000" },
+          ],
+        },
       ]),
     );
+    const model = strFromU8(files["3D/3dmodel.model"]);
+    // Parts 2, 3 and assembly 4; parts 5, 6 and assembly 7.
+    expect([...model.matchAll(/<item objectid="(\d+)"/g)].map((m) => m[1])).toEqual(["4", "7"]);
+    expect(model).toContain('<object id="7" name="b" type="model"><components><component objectid="5"/><component objectid="6"/>');
+    expect(model).toContain('pid="1" pindex="3"');
+
+    // Filament slots are shared across labels: same colour, same slot.
     const settings = strFromU8(files["Metadata/model_settings.config"]);
-    // Object id is the assembly; part ids are the component object ids.
-    expect(settings).toContain('<object id="5">');
+    expect([...settings.matchAll(/<object id="(\d+)">/g)].map((m) => m[1])).toEqual(["4", "7"]);
     const parts = [...settings.matchAll(/<part id="(\d+)"[\s\S]*?key="extruder" value="(\d+)"/g)].map((m) => [
       m[1],
       m[2],
@@ -102,8 +126,44 @@ describe("export", () => {
     expect(parts).toEqual([
       ["2", "1"],
       ["3", "2"],
-      ["4", "2"],
+      ["5", "1"],
+      ["6", "3"],
     ]);
+  });
+
+  it("lays labels out back to front without overlapping", () => {
+    const labels = Array.from({ length: 20 }, (_, i) => {
+      const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "", units: (i % 3) + 1 });
+      return { name: `l${i}`, parts: [{ name: "label", manifold: base, color: "#202020" }] };
+    });
+    const layout = plateLayout(labels);
+    const boxes = labels.map((l, i) => {
+      const b = l.parts[0].manifold.boundingBox();
+      const [x, y, z] = layout[i];
+      expect(b.min[2] + z).toBeCloseTo(0, 6);
+      return { minX: b.min[0] + x, maxX: b.max[0] + x, minY: b.min[1] + y, maxY: b.max[1] + y };
+    });
+    // The first label is at the back (highest y) of the first column.
+    expect(boxes[1].maxY).toBeLessThan(boxes[0].minY);
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const [p, q] = [boxes[i], boxes[j]];
+        const overlap = p.minX < q.maxX && q.minX < p.maxX && p.minY < q.maxY && q.minY < p.maxY;
+        expect(overlap).toBe(false);
+      }
+      // Everything stays on a 256 mm plate.
+      expect(boxes[i].minX).toBeGreaterThan(0);
+      expect(boxes[i].maxX).toBeLessThan(256);
+      expect(boxes[i].minY).toBeGreaterThan(0);
+      expect(boxes[i].maxY).toBeLessThan(256);
+    }
+  });
+
+  it("zips STLs in a folder per label, numbering repeated names", () => {
+    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "" });
+    const object = { name: "label-M3", parts: [{ name: "label", manifold: base, color: "#202020" }] };
+    const files = unzipSync(toStlZip([object, object]));
+    expect(Object.keys(files).sort()).toEqual(["label-M3-2/label.stl", "label-M3/label.stl"]);
   });
 
   it("writes a binary STL with the right triangle count", () => {

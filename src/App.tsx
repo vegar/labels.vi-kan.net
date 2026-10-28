@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { HEIGHT, widthForUnits } from "./cullenect";
-import { to3mf, toStlZip, type ExportPart } from "./export";
+import { to3mf, toStlZip, type ExportObject } from "./export";
 import { maxEmbeddedDepth } from "./label";
 import {
   addLabel,
@@ -86,14 +86,23 @@ export function App() {
             ? `Built in ${ms} ms`
             : "No text yet";
 
-  const exportParts = (): ExportPart[] =>
-    parts
-      ? [
-          { name: "label", manifold: parts.base, color: state.baseColor },
-          ...(parts.text ? [{ name: "text", manifold: parts.text, color: state.textColor }] : []),
-          ...(parts.symbols ? [{ name: "symbols", manifold: parts.symbols, color: state.symbolColor }] : []),
-        ]
-      : [];
+  // Every label goes into the export, so wait until all of them are built.
+  const exportObjects = (): ExportObject[] =>
+    session.labels.map((label) => {
+      const built = builds.get(label.id)!.parts!;
+      return {
+        name: fileName(label),
+        parts: [
+          { name: "label", manifold: built.base, color: label.baseColor },
+          ...(built.text ? [{ name: "text", manifold: built.text, color: label.textColor }] : []),
+          ...(built.symbols ? [{ name: "symbols", manifold: built.symbols, color: label.symbolColor }] : []),
+        ],
+      };
+    });
+  const canExport = session.labels.every((label) => builds.get(label.id)?.parts);
+  const count = session.labels.length;
+  const exportName = count === 1 ? fileName(state) : `labels-${count}`;
+  const labelCount = count === 1 ? "" : ` (${count} labels)`;
 
   return (
     <main className="app">
@@ -258,15 +267,15 @@ export function App() {
           <button
             type="button"
             className="primary"
-            disabled={!parts}
-            onClick={() => download(to3mf(fileName(state), exportParts()), `${fileName(state)}.3mf`, "model/3mf")}
+            disabled={!canExport}
+            onClick={() => download(to3mf(exportName, exportObjects()), `${exportName}.3mf`, "model/3mf")}
           >
-            Download 3MF
+            Download 3MF{labelCount}
           </button>
           <button
             type="button"
-            disabled={!parts}
-            onClick={() => download(toStlZip(exportParts()), `${fileName(state)}-stl.zip`, "application/zip")}
+            disabled={!canExport}
+            onClick={() => download(toStlZip(exportObjects()), `${exportName}-stl.zip`, "application/zip")}
           >
             STL (zip)
           </button>
