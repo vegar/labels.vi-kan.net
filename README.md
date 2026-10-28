@@ -26,9 +26,10 @@ Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
   makes a blank label that keeps the size, print style and colours of the one you were editing.
   Labels are kept in the browser between visits.
 - Live 3D preview with label, text and symbol colours.
-- **3MF export** with the label, the text and the symbols as parts of one object, so you can
-  assign a filament to each in Bambu Studio, OrcaSlicer or PrusaSlicer. STL export as a zip of
-  one file per part.
+- **3MF export** of all labels at once, laid out on one plate. Each label is its own object,
+  with the label, the text and the symbols as parts, so you can assign a filament to each in
+  Bambu Studio, OrcaSlicer or PrusaSlicer; Bambu Studio and OrcaSlicer get one filament slot per
+  colour, shared by all labels. STL export as a zip with a folder per label and one file per part.
 
 ## Printing tips
 
@@ -59,7 +60,6 @@ For the `labels.vi-kan.net` domain, add it under **Settings → Pages → Custom
 
 ## Roadmap
 
-- Several labels at once on a print plate, exported as one slicer project
 - More label holders from gflabel (pred, modern, predbox, tailorbox)
 
 See `THIRD_PARTY_NOTICES.md` for licences of included code and fonts.
