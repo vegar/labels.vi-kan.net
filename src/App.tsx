@@ -279,7 +279,12 @@ export function App() {
       </aside>
       <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />
       <section className="viewer">
-        <PreviewCanvas labels={previewLabels} selected={state.id} layout={layout} />
+        <PreviewCanvas
+          labels={previewLabels}
+          selected={state.id}
+          layout={layout}
+          onSelect={(id) => setSession((s) => ({ ...s, selected: id }))}
+        />
         <div className="status">
           <div className="row-controls">
             <label>

@@ -26,6 +26,9 @@ export interface RowLayout {
 /** Space between neighbouring labels, in mm. */
 const GAP = 4;
 
+/** How far the pointer may move, in px, before a press counts as an orbit drag rather than a click. */
+const CLICK_SLOP = 5;
+
 interface Shown {
   group: THREE.Group;
   manifolds: Manifold[];
@@ -59,6 +62,11 @@ export class Preview {
   private framed = "";
   private clock = new THREE.Clock();
   private resizeObserver: ResizeObserver;
+  private raycaster = new THREE.Raycaster();
+  private pressed: { x: number; y: number } | null = null;
+
+  /** Called with a label's id when it is clicked in the view. */
+  onPick: ((id: string) => void) | null = null;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -74,6 +82,11 @@ export class Preview {
     const key = new THREE.DirectionalLight(0xffffff, 1.8);
     key.position.set(-40, -60, 100);
     this.scene.add(key);
+
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener("pointerdown", this.onPointerDown);
+    canvas.addEventListener("pointerup", this.onPointerUp);
+    canvas.addEventListener("pointermove", this.onPointerMove);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -121,6 +134,10 @@ export class Preview {
 
   dispose() {
     this.renderer.setAnimationLoop(null);
+    const canvas = this.renderer.domElement;
+    canvas.removeEventListener("pointerdown", this.onPointerDown);
+    canvas.removeEventListener("pointerup", this.onPointerUp);
+    canvas.removeEventListener("pointermove", this.onPointerMove);
     this.resizeObserver.disconnect();
     this.controls.dispose();
     for (const [id, shown] of this.shown) this.remove(id, shown);
@@ -133,6 +150,7 @@ export class Preview {
     let shown = this.shown.get(label.id);
     if (!shown) {
       const group = new THREE.Group();
+      group.userData.id = label.id;
       group.position.copy(target);
       this.scene.add(group);
       shown = { group, manifolds: [], target };
@@ -161,6 +179,38 @@ export class Preview {
     clearGroup(shown.group);
     this.scene.remove(shown.group);
     this.shown.delete(id);
+  }
+
+  private onPointerDown = (e: PointerEvent) => {
+    this.pressed = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+  };
+
+  /** A press released close to where it started is a click; anything further was an orbit drag. */
+  private onPointerUp = (e: PointerEvent) => {
+    const pressed = this.pressed;
+    this.pressed = null;
+    if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > CLICK_SLOP) return;
+    const id = this.pick(e);
+    if (id) this.onPick?.(id);
+  };
+
+  /** Show a pointer cursor over labels while no button is held. */
+  private onPointerMove = (e: PointerEvent) => {
+    if (e.buttons !== 0) return;
+    this.renderer.domElement.style.cursor = this.pick(e) ? "pointer" : "";
+  };
+
+  /** The id of the label under the pointer, if any. */
+  private pick(e: PointerEvent): string | undefined {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const groups = [...this.shown.values()].map((s) => s.group);
+    const [hit] = this.raycaster.intersectObjects(groups, true);
+    return hit?.object.parent?.userData.id;
   }
 
   /** Ease every label towards its target position. */

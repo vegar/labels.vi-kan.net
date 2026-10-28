@@ -5,16 +5,22 @@ interface Props {
   labels: PreviewLabel[];
   selected: string;
   layout: RowLayout;
+  /** Called when a label is clicked in the view. */
+  onSelect: (id: string) => void;
 }
 
 /** React wrapper around the three.js preview. */
-export function PreviewCanvas({ labels, selected, layout }: Props) {
+export function PreviewCanvas({ labels, selected, layout, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const preview = useRef<Preview>(null);
+  // The preview lives for the component's lifetime, so it calls the latest handler through a ref.
+  const select = useRef(onSelect);
+  select.current = onSelect;
 
   useEffect(() => {
     const p = new Preview(container.current!);
     preview.current = p;
+    p.onPick = (id) => select.current(id);
     const dark = window.matchMedia("(prefers-color-scheme: dark)");
     const syncBackground = () => p.setBackground(dark.matches ? "#17191c" : "#eef0f2");
     syncBackground();
