@@ -3,24 +3,6 @@ import type { CrossSection, ManifoldToplevel, Vec2 } from "manifold-3d";
 
 export type Align = "left" | "center" | "right";
 
-export interface TextLayoutOptions {
-  lines: string[];
-  align: Align;
-  /** Area the text must fit in, in mm. */
-  areaWidth: number;
-  areaHeight: number;
-  /** Largest allowed capital-letter height, in mm. Text shrinks below this to fit. */
-  maxCapHeight: number;
-  /** Distance between baselines, as a multiple of the cap height. */
-  lineSpacing?: number;
-}
-
-export interface TextLayout {
-  shape: CrossSection;
-  /** The cap height actually used after fitting, in mm. */
-  capHeight: number;
-}
-
 const CURVE_STEPS = 8;
 
 /** Convert an opentype.js path (y down) into closed polygons (y up). */
@@ -87,52 +69,35 @@ export function capHeightRatio(font: Font): number {
 }
 
 /**
- * Lay out one or more lines of text as a 2D shape centered on the origin,
- * scaled down as needed to fit the given area.
+ * Lay out one or more lines of text as a 2D shape with a cap height of 1 mm,
+ * centered on its ink. Lines are aligned to each other by `align`.
+ * Undefined when there is nothing to draw.
  */
-export function layoutText(
+export function textBlock(
   wasm: ManifoldToplevel,
   font: Font,
-  opts: TextLayoutOptions,
-): TextLayout | undefined {
-  const lines = opts.lines.map((l) => l.trim());
+  text: string,
+  align: Align,
+  /** Distance between baselines, as a multiple of the cap height. */
+  lineSpacing = 1.6,
+): CrossSection | undefined {
+  const lines = text.split("\n").map((l) => l.trim());
   if (lines.every((l) => l === "")) return undefined;
 
-  // Lay out at cap height = 1 mm, then scale the whole block.
   const emSize = 1 / capHeightRatio(font);
-  const pitch = opts.lineSpacing ?? 1.6;
   const widths = lines.map((l) => font.getAdvanceWidth(l, emSize));
   const blockWidth = Math.max(...widths);
 
   const polygons: Vec2[][] = [];
   lines.forEach((line, i) => {
     if (!line) return;
-    const offset =
-      opts.align === "left" ? 0 : opts.align === "right" ? blockWidth - widths[i] : (blockWidth - widths[i]) / 2;
-    const path = font.getPath(line, offset, i * pitch, emSize);
+    const offset = align === "left" ? 0 : align === "right" ? blockWidth - widths[i] : (blockWidth - widths[i]) / 2;
+    const path = font.getPath(line, offset, i * lineSpacing, emSize);
     polygons.push(...pathToPolygons(path.commands));
   });
   if (polygons.length === 0) return undefined;
 
-  let shape = new wasm.CrossSection(polygons, "NonZero");
-  const bounds = shape.bounds();
-  const inkWidth = bounds.max[0] - bounds.min[0];
-  const inkHeight = bounds.max[1] - bounds.min[1];
-
-  const scale = Math.min(
-    opts.maxCapHeight,
-    inkWidth > 0 ? opts.areaWidth / inkWidth : Infinity,
-    inkHeight > 0 ? opts.areaHeight / inkHeight : Infinity,
-  );
-
-  // Center the block vertically on its ink. Horizontally, align the block to
-  // the area edge (or center) using the ink extents.
-  const cy = (bounds.min[1] + bounds.max[1]) / 2;
-  let tx: number;
-  if (opts.align === "left") tx = -opts.areaWidth / 2 / scale - bounds.min[0];
-  else if (opts.align === "right") tx = opts.areaWidth / 2 / scale - bounds.max[0];
-  else tx = -(bounds.min[0] + bounds.max[0]) / 2;
-
-  shape = shape.translate(tx, -cy).scale(scale);
-  return { shape, capHeight: scale };
+  const shape = new wasm.CrossSection(polygons, "NonZero");
+  const { min, max } = shape.bounds();
+  return shape.translate(-(min[0] + max[0]) / 2, -(min[1] + max[1]) / 2);
 }

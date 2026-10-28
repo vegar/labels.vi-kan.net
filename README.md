@@ -20,7 +20,9 @@ Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
   self-tapping, flanged, partly threaded or flipped.
 - **Nut symbol**: hex nut or lock nut (from above, from the side, or both), square nut or T-nut.
 - More symbols ported from gflabel: a bolt drawn to length (with a broken shaft when too long),
-  washer, lock washer and threaded insert. Symbols sit in a row left or right of the text.
+  washer, lock washer and threaded insert.
+- **Text and symbols in any order**: a label is a row of segments, each a piece of text or a
+  symbol (text, symbol, text, ...). Symbols keep their size and the text shares the rest.
 - **Multiple labels** in one session: add, remove and switch between labels. **Clone** a label
   with a list of new texts (one per line) to make many matching labels at once. **Add label**
   makes a blank label that keeps the size, print style and colours of the one you were editing.

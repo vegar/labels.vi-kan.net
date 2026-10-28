@@ -3,7 +3,7 @@ import opentype from "opentype.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../src/manifold";
-import { buildLabel, DEFAULT_OPTIONS } from "../src/label";
+import { buildLabel, DEFAULT_OPTIONS, type Segment } from "../src/label";
 import { DRIVES, migrateSymbol, renderSymbol, SYMBOLS, type LabelSymbol } from "../src/symbols";
 
 let wasm: ManifoldToplevel;
@@ -114,42 +114,66 @@ describe("renderSymbol", () => {
 });
 
 describe("labels with symbols", () => {
-  const withBolt = { ...DEFAULT_OPTIONS, symbols: [{ kind: "screw", style: "cullenect", view: "side", headShape: "socket", drives: ["hex"] }] as LabelSymbol[] };
+  const bolt: LabelSymbol = { kind: "screw", style: "cullenect", view: "side", headShape: "socket", drives: ["hex"] };
+  const text = (t: string): Segment => ({ kind: "text", text: t });
+  const label = (...segments: Segment[]) => ({ ...DEFAULT_OPTIONS, segments });
 
-  it("puts symbols and text side by side inside the margins", () => {
-    for (const symbolPosition of ["left", "right"] as const) {
-      const { text, symbols } = buildLabel(wasm, font, { ...withBolt, symbolPosition });
-      const tb = text!.boundingBox();
+  const expectInside = (b: { min: number[]; max: number[] }, halfWidth = 18) => {
+    expect(b.min[0]).toBeGreaterThanOrEqual(-halfWidth + 0.8 - 1e-3);
+    expect(b.max[0]).toBeLessThanOrEqual(halfWidth - 0.8 + 1e-3);
+    expect(b.min[1]).toBeGreaterThanOrEqual(-5.5 + 0.8 - 1e-3);
+    expect(b.max[1]).toBeLessThanOrEqual(5.5 - 0.8 + 1e-3);
+  };
+
+  it("puts symbols and text side by side inside the margins, in order", () => {
+    for (const segments of [[bolt, text("M3")], [text("M3"), bolt]]) {
+      const { text: t, symbols } = buildLabel(wasm, font, label(...segments));
+      const tb = t!.boundingBox();
       const sb = symbols!.boundingBox();
-      for (const b of [tb, sb]) {
-        expect(b.min[0]).toBeGreaterThanOrEqual(-18 + 0.8 - 1e-3);
-        expect(b.max[0]).toBeLessThanOrEqual(18 - 0.8 + 1e-3);
-        expect(b.min[1]).toBeGreaterThanOrEqual(-5.5 + 0.8 - 1e-3);
-        expect(b.max[1]).toBeLessThanOrEqual(5.5 - 0.8 + 1e-3);
-      }
-      if (symbolPosition === "left") expect(sb.max[0]).toBeLessThan(tb.min[0]);
+      expectInside(tb);
+      expectInside(sb);
+      if (segments[0] === bolt) expect(sb.max[0]).toBeLessThan(tb.min[0]);
       else expect(tb.max[0]).toBeLessThan(sb.min[0]);
     }
   });
 
+  it("lays out any mix of text and symbols left to right", () => {
+    const nut: LabelSymbol = { kind: "nut" };
+    const { text: t, symbols } = buildLabel(wasm, font, { ...label(text("M3"), bolt, text("12"), nut), units: 3 });
+    expectInside(t!.boundingBox(), 60);
+    expectInside(symbols!.boundingBox(), 60);
+    // Text, bolt, text, nut: the text starts first, the nut ends last,
+    // and the bolt sits inside the span of the text.
+    const [tb, sb] = [t!.boundingBox(), symbols!.boundingBox()];
+    expect(tb.min[0]).toBeLessThan(sb.min[0]);
+    expect(tb.max[0]).toBeGreaterThan(sb.min[0]);
+    expect(sb.max[0]).toBeGreaterThan(tb.max[0]);
+  });
+
+  it("shrinks a row that is too long to fit", () => {
+    const many = Array.from({ length: 12 }, () => bolt);
+    const { symbols } = buildLabel(wasm, font, label(...many, text("M3 × 12")));
+    expectInside(symbols!.boundingBox());
+  });
+
   it("inlays symbols flush and keeps the total volume", () => {
-    const empty = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "" });
-    const { base, text, symbols } = buildLabel(wasm, font, withBolt);
+    const empty = buildLabel(wasm, font, label());
+    const { base, text: t, symbols } = buildLabel(wasm, font, label(bolt, text("M3")));
     const sb = symbols!.boundingBox();
     expect(sb.max[2]).toBeCloseTo(0, 3);
     expect(sb.min[2]).toBeCloseTo(-0.2, 3);
-    expect(base.volume() + text!.volume() + symbols!.volume()).toBeCloseTo(empty.base.volume(), 2);
+    expect(base.volume() + t!.volume() + symbols!.volume()).toBeCloseTo(empty.base.volume(), 2);
   });
 
   it("centers symbols when there is no text", () => {
-    const { text, symbols } = buildLabel(wasm, font, { ...withBolt, text: "" });
-    expect(text).toBeUndefined();
+    const { text: t, symbols } = buildLabel(wasm, font, label(bolt, text(" ")));
+    expect(t).toBeUndefined();
     const sb = symbols!.boundingBox();
     expect(sb.min[0] + sb.max[0]).toBeCloseTo(0, 3);
   });
 
   it("gives a bolt the room the text leaves", () => {
-    const opts = { ...DEFAULT_OPTIONS, units: 3, text: "M4", symbols: [{ kind: "bolt", length: 40 }] as LabelSymbol[] };
+    const opts = { ...label(text("M4"), { kind: "bolt", length: 40 }), units: 3 };
     const sb = buildLabel(wasm, font, opts).symbols!.boundingBox();
     expect(sb.max[0] - sb.min[0]).toBeGreaterThan(40);
   });
