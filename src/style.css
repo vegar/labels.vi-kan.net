@@ -39,8 +39,48 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: var(--sidebar-width, 340px) 1fr;
   height: 100vh;
+  position: relative;
+}
+
+/* Sits over the sidebar's right border; the grid stays two columns. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  margin-left: -5px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 3px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.sidebar-resizer[data-dragging]::after {
+  background: var(--accent);
+}
+
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+
+/* Keep the cursor and stop text selection while dragging across the page. */
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .panel {
@@ -251,6 +291,9 @@ footer a {
     grid-template-columns: 1fr;
     grid-template-rows: 45vh auto;
     height: auto;
+  }
+  .sidebar-resizer {
+    display: none;
   }
   .viewer {
     order: -1;
