@@ -228,6 +228,24 @@ footer a {
   font-variant-numeric: tabular-nums;
 }
 
+.row-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.row-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 160px;
+}
+
+.row-controls output {
+  float: right;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 760px) {
   .app {
     grid-template-columns: 1fr;
