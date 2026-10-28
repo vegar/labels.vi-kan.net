@@ -2,9 +2,22 @@ import { useEffect, useState } from "react";
 import { HEIGHT, widthForUnits } from "./cullenect";
 import { to3mf, toStlZip, type ExportPart } from "./export";
 import { maxEmbeddedDepth } from "./label";
-import { fileName, loadState, saveState, type LabelState, type Weight } from "./state";
+import {
+  addLabel,
+  blankLabel,
+  duplicateLabel,
+  fileName,
+  loadSession,
+  removeLabel,
+  saveSession,
+  updateLabel,
+  type LabelState,
+  type Session,
+  type Weight,
+} from "./state";
 import { useEngine } from "./useEngine";
 import { useLabel } from "./useLabel";
+import { LabelList } from "./components/LabelList";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 import { Segmented } from "./components/Segmented";
 import { SymbolEditor } from "./components/SymbolEditor";
@@ -22,9 +35,10 @@ function download(data: Uint8Array, filename: string, type: string) {
 }
 
 export function App() {
-  const [state, setState] = useState<LabelState>(loadState);
-  const update = (patch: Partial<LabelState>) => setState((s) => ({ ...s, ...patch }));
-  useEffect(() => saveState(state), [state]);
+  const [session, setSession] = useState<Session>(loadSession);
+  useEffect(() => saveSession(session), [session]);
+  const state = session.labels.find((l) => l.id === session.selected) ?? session.labels[0];
+  const update = (patch: Partial<LabelState>) => setSession((s) => updateLabel(s, state.id, patch));
 
   const { engine, error: engineError } = useEngine();
   const { parts, error: buildError, ms } = useLabel(engine, state);
@@ -65,6 +79,15 @@ export function App() {
           <h1>Gridfinity Labels</h1>
           <p className="sub">Cullenect label, ready for multi-colour printing.</p>
         </header>
+
+        <LabelList
+          labels={session.labels}
+          selected={state.id}
+          onSelect={(id) => setSession((s) => ({ ...s, selected: id }))}
+          onAdd={() => setSession((s) => addLabel(s, blankLabel(state)))}
+          onDuplicate={(id) => setSession((s) => duplicateLabel(s, id))}
+          onRemove={(id) => setSession((s) => removeLabel(s, id))}
+        />
 
         <section>
           <h2>Label</h2>

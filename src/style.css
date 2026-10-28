@@ -383,3 +383,75 @@ input[type="number"] {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+.label-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.label-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px 4px 4px;
+}
+
+.label-list li[aria-current="true"] {
+  background: var(--pressed);
+  border-color: var(--accent);
+}
+
+.label-pick {
+  font: inherit;
+  font-size: 0.9rem;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.label-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swatch {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  width: 30px;
+  padding: 3px 0;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.add-label {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.add-label:hover {
+  border-color: var(--accent);
+}
