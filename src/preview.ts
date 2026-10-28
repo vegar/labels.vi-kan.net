@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Manifold } from "manifold-3d";
+import { HEIGHT } from "./cullenect";
 
 export interface PreviewPart {
   manifold: Manifold;
@@ -14,15 +15,15 @@ export interface PreviewLabel {
   width: number;
 }
 
-/** How the selected label is set apart from the rest of the row, in mm. */
+/** How the selected label is set apart from the rest, in mm. */
 export interface RowLayout {
   /** Lift of the selected label along z. */
   lift: number;
-  /** Extra space between the selected label and its neighbours, along x. */
+  /** Extra space between the selected label and its neighbours, along y. */
   spread: number;
 }
 
-/** Space between neighbouring labels in the row, in mm. */
+/** Space between neighbouring labels, in mm. */
 const GAP = 4;
 
 interface Shown {
@@ -89,7 +90,8 @@ export class Preview {
   }
 
   /**
-   * Show the labels in a row along x. The selected label is lifted and its
+   * Show the labels in a column from back to front, the first label furthest
+   * away, like cards in a file box. The selected label is lifted and its
    * neighbours pushed aside according to `layout`; labels glide to their
    * new places when the selection or layout changes.
    */
@@ -98,23 +100,22 @@ export class Preview {
       if (!labels.some((l) => l.id === id)) this.remove(id, shown);
     }
 
-    // Lay the row out without the spread first, centred on the origin, so the
-    // row doesn't shift sideways when another label is selected.
-    const rowWidth = labels.reduce((sum, l) => sum + l.width, 0) + GAP * Math.max(0, labels.length - 1);
+    // Lay the column out without the spread first, centred on the origin, so
+    // it doesn't shift when another label is selected.
+    const pitch = HEIGHT + GAP;
+    const depth = labels.length * pitch - GAP;
+    const width = Math.max(0, ...labels.map((l) => l.width));
     const at = labels.findIndex((l) => l.id === selected);
-    let x = -rowWidth / 2;
     labels.forEach((label, i) => {
-      const center = x + label.width / 2;
-      x += label.width + GAP;
-      const offset = at < 0 || i === at ? 0 : i < at ? -layout.spread : layout.spread;
-      const target = new THREE.Vector3(center + offset, 0, i === at ? layout.lift : 0);
-      this.show(label, target);
+      const y = depth / 2 - HEIGHT / 2 - i * pitch;
+      const offset = at < 0 || i === at ? 0 : i < at ? layout.spread : -layout.spread;
+      this.show(label, new THREE.Vector3(0, y + offset, i === at ? layout.lift : 0));
     });
 
-    const frame = `${labels.length}:${rowWidth}`;
+    const frame = `${labels.length}:${width}`;
     if (frame !== this.framed) {
       this.framed = frame;
-      this.frame(rowWidth + 2 * layout.spread);
+      this.frame(width, depth + 2 * layout.spread);
     }
   }
 
@@ -170,12 +171,14 @@ export class Preview {
     }
   }
 
-  /** Point the camera at a row of the given width, slightly from below the front. */
-  private frame(width: number) {
-    // Fit the row across the view, but don't zoom in further than for a 1U label.
-    const halfFov = THREE.MathUtils.degToRad(this.camera.fov / 2);
-    const fit = (width / 2 / (Math.tan(halfFov) * Math.max(this.camera.aspect, 0.5))) * 1.15;
-    const distance = Math.max(Math.max(width, 40) * 2.1, fit);
+  /** Point the camera at an area of labels, from above the front. */
+  private frame(width: number, depth: number) {
+    // Fit the whole column in view, but don't zoom in further than for one 1U label.
+    const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const fitWidth = (width / 2 / (tan * Math.max(this.camera.aspect, 0.5))) * 1.15;
+    // The camera looks down at about 57°, which foreshortens depth a little.
+    const fitDepth = ((depth * 0.85) / 2 / tan) * 1.5;
+    const distance = Math.max(Math.max(width, 40) * 2.1, fitWidth, fitDepth);
     this.camera.position.set(0, -distance * 0.55, distance * 0.85);
     this.controls.target.set(0, 0, 0);
     this.controls.update();
