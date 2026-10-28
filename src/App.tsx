@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HEIGHT, widthForUnits } from "./cullenect";
 import { to3mf, toStlZip, type ExportPart } from "./export";
 import { maxEmbeddedDepth } from "./label";
@@ -16,9 +16,10 @@ import {
   type Weight,
 } from "./state";
 import { useEngine } from "./useEngine";
-import { useLabel } from "./useLabel";
+import { useLabels } from "./useLabels";
 import { LabelList } from "./components/LabelList";
 import { PreviewCanvas } from "./components/PreviewCanvas";
+import type { PreviewLabel, RowLayout } from "./preview";
 import { Segmented } from "./components/Segmented";
 import { SymbolEditor } from "./components/SymbolEditor";
 
@@ -41,7 +42,29 @@ export function App() {
   const update = (patch: Partial<LabelState>) => setSession((s) => updateLabel(s, state.id, patch));
 
   const { engine, error: engineError } = useEngine();
-  const { parts, error: buildError, ms } = useLabel(engine, state);
+  const builds = useLabels(engine, session.labels);
+  const { parts, error: buildError, ms } = builds.get(state.id) ?? {};
+
+  // Prototype: how far the selected label stands out from the others in the preview.
+  const [layout, setLayout] = useState<RowLayout>({ lift: 2, spread: 6 });
+  const previewLabels = useMemo<PreviewLabel[]>(
+    () =>
+      session.labels.map((label) => {
+        const built = builds.get(label.id)?.parts;
+        return {
+          id: label.id,
+          width: widthForUnits(label.units),
+          parts: built
+            ? [
+                { manifold: built.base, color: label.baseColor },
+                ...(built.text ? [{ manifold: built.text, color: label.textColor }] : []),
+                ...(built.symbols ? [{ manifold: built.symbols, color: label.symbolColor }] : []),
+              ]
+            : [],
+        };
+      }),
+    [session.labels, builds],
+  );
 
   // Flush text over the snap-fit channels can only go so deep.
   const maxDepth = state.style === "embedded" ? maxEmbeddedDepth(state) : 1;
@@ -255,14 +278,38 @@ export function App() {
         </footer>
       </aside>
       <section className="viewer">
-        <PreviewCanvas
-          parts={parts}
-          width={widthForUnits(state.units)}
-          baseColor={state.baseColor}
-          textColor={state.textColor}
-          symbolColor={state.symbolColor}
-        />
-        <div className="status">{status}</div>
+        <PreviewCanvas labels={previewLabels} selected={state.id} layout={layout} />
+        <div className="status">
+          <div className="row-controls">
+            <label>
+              <span>
+                Lift selected <output>{layout.lift.toFixed(1)} mm</output>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={20}
+                step={0.5}
+                value={layout.lift}
+                onChange={(e) => setLayout((l) => ({ ...l, lift: Number(e.target.value) }))}
+              />
+            </label>
+            <label>
+              <span>
+                Spread others <output>{layout.spread.toFixed(1)} mm</output>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                step={0.5}
+                value={layout.spread}
+                onChange={(e) => setLayout((l) => ({ ...l, spread: Number(e.target.value) }))}
+              />
+            </label>
+          </div>
+          <div>{status}</div>
+        </div>
       </section>
     </main>
   );

@@ -1,17 +1,14 @@
 import { useEffect, useRef } from "react";
-import { Preview } from "../preview";
-import type { LabelParts } from "../label";
+import { Preview, type PreviewLabel, type RowLayout } from "../preview";
 
 interface Props {
-  parts?: LabelParts;
-  width: number;
-  baseColor: string;
-  textColor: string;
-  symbolColor: string;
+  labels: PreviewLabel[];
+  selected: string;
+  layout: RowLayout;
 }
 
 /** React wrapper around the three.js preview. */
-export function PreviewCanvas({ parts, width, baseColor, textColor, symbolColor }: Props) {
+export function PreviewCanvas({ labels, selected, layout }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const preview = useRef<Preview>(null);
 
@@ -30,16 +27,8 @@ export function PreviewCanvas({ parts, width, baseColor, textColor, symbolColor 
   }, []);
 
   useEffect(() => {
-    if (!parts) return;
-    preview.current?.update(
-      [
-        { manifold: parts.base, color: baseColor },
-        ...(parts.text ? [{ manifold: parts.text, color: textColor }] : []),
-        ...(parts.symbols ? [{ manifold: parts.symbols, color: symbolColor }] : []),
-      ],
-      width,
-    );
-  }, [parts, width, baseColor, textColor, symbolColor]);
+    preview.current?.update(labels, selected, layout);
+  }, [labels, selected, layout]);
 
   return <div id="preview" ref={container} />;
 }
