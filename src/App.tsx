@@ -46,7 +46,7 @@ export function App() {
   const { parts, error: buildError, ms } = builds.get(state.id) ?? {};
 
   // Prototype: how far the selected label stands out from the others in the preview.
-  const [layout, setLayout] = useState<RowLayout>({ lift: 2, spread: 6 });
+  const [layout, setLayout] = useState<RowLayout>({ lift: 7, spread: 4.5 });
   const previewLabels = useMemo<PreviewLabel[]>(
     () =>
       session.labels.map((label) => {
