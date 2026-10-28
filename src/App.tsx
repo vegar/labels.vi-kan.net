@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { HEIGHT, widthForUnits } from "./cullenect";
 import { to3mf, toStlZip, type ExportObject } from "./export";
 import { maxEmbeddedDepth } from "./label";
@@ -21,6 +21,7 @@ import { LabelList } from "./components/LabelList";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 import type { PreviewLabel, RowLayout } from "./preview";
 import { Segmented } from "./components/Segmented";
+import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
 import { SymbolEditor } from "./components/SymbolEditor";
 
 /** Below this letter height, text gets hard to read with a 0.4 mm nozzle. */
@@ -40,6 +41,8 @@ export function App() {
   useEffect(() => saveSession(session), [session]);
   const state = session.labels.find((l) => l.id === session.selected) ?? session.labels[0];
   const update = (patch: Partial<LabelState>) => setSession((s) => updateLabel(s, state.id, patch));
+
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
 
   const { engine, error: engineError } = useEngine();
   const builds = useLabels(engine, session.labels);
@@ -105,7 +108,7 @@ export function App() {
   const labelCount = count === 1 ? "" : ` (${count} labels)`;
 
   return (
-    <main className="app">
+    <main className="app" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
       <aside className="panel">
         <header>
           <h1>Gridfinity Labels</h1>
@@ -286,6 +289,7 @@ export function App() {
           <a href="https://makerworld.com/en/models/446624">Cullen J Webb</a>.
         </footer>
       </aside>
+      <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />
       <section className="viewer">
         <PreviewCanvas labels={previewLabels} selected={state.id} layout={layout} />
         <div className="status">
