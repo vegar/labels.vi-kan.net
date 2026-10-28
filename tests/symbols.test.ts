@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../src/manifold";
 import { buildLabel, DEFAULT_OPTIONS } from "../src/label";
-import { DRIVES, renderSymbol, SYMBOLS, type LabelSymbol } from "../src/symbols";
+import { DRIVES, migrateSymbol, renderSymbol, SYMBOLS, type LabelSymbol } from "../src/symbols";
 
 let wasm: ManifoldToplevel;
 const fontData = readFileSync(new URL("../public/fonts/OpenSans-Regular.ttf", import.meta.url));
@@ -23,6 +23,16 @@ function variants(): LabelSymbol[] {
     for (const m of info.modifiers ?? []) out.push({ ...info.defaults, [m]: true });
     if (info.drives) for (const d of DRIVES) out.push({ ...info.defaults, drives: [d.value] });
   }
+  const screw = SYMBOLS[0].defaults;
+  for (const style of ["regular", "cullenect"] as const) {
+    for (const view of ["both", "drive", "side"] as const) {
+      out.push({ ...screw, style, view }, { ...screw, style, view, hexHead: true }, { ...screw, style, view, flip: true });
+      for (const headShape of SYMBOLS[0].headShapes!) out.push({ ...screw, style, view, headShape, partial: true });
+    }
+  }
+  for (const nutType of ["regular", "lock", "square", "tnut"] as const) {
+    for (const nutView of ["both", "top", "side"] as const) out.push({ kind: "nut", nutType, nutView });
+  }
   return out;
 }
 
@@ -31,16 +41,16 @@ describe("renderSymbol", () => {
     const shape = renderSymbol(wasm, sym, 8, 30);
     expect(shape.isEmpty()).toBe(false);
     const { min, max } = shape.bounds();
-    // Only the Cullenect bolt is drawn taller than the row.
-    const limit = sym.kind === "cullbolt" ? 8 * 1.6 : 8;
+    // Only the Cullenect screw's side view is drawn taller than the row.
+    const limit = sym.style === "cullenect" && sym.view !== "drive" ? 8 * 1.6 : 8;
     expect(max[1] - min[1]).toBeLessThanOrEqual(limit * 1.01);
     expect(max[1] - min[1]).toBeGreaterThan(2);
   });
 
   it("cuts a drive recess into a head", () => {
-    const plain = renderSymbol(wasm, { kind: "head" }, 8).area();
-    const torx = renderSymbol(wasm, { kind: "head", drives: ["torx"] }, 8).area();
-    const secure = renderSymbol(wasm, { kind: "head", drives: ["torx", "security"] }, 8).area();
+    const plain = renderSymbol(wasm, { kind: "screw", view: "drive" }, 8).area();
+    const torx = renderSymbol(wasm, { kind: "screw", view: "drive", drives: ["torx"] }, 8).area();
+    const secure = renderSymbol(wasm, { kind: "screw", view: "drive", drives: ["torx", "security"] }, 8).area();
     expect(torx).toBeLessThan(plain);
     expect(secure).toBeGreaterThan(torx);
   });
@@ -56,6 +66,44 @@ describe("renderSymbol", () => {
     expect(side[0].max[0] - side[0].min[0]).toBeCloseTo(8 * 1.6, 3);
   });
 
+  it("puts the drive in a Cullenect screw's head only when it is drawn alone", () => {
+    const area = (sym: LabelSymbol) => renderSymbol(wasm, sym, 8).area();
+    const side: LabelSymbol = { kind: "screw", style: "cullenect", view: "side", headShape: "socket" };
+    expect(area({ ...side, drives: ["hex"] })).toBeLessThan(area(side));
+    const both: LabelSymbol = { ...side, view: "both" };
+    const sideOfBoth = (sym: LabelSymbol) =>
+      renderSymbol(wasm, sym, 8)
+        .decompose()
+        .filter((p) => p.bounds().min[0] >= 0)
+        .reduce((a, p) => a + p.area(), 0);
+    expect(sideOfBoth({ ...both, drives: ["hex"] })).toBeCloseTo(sideOfBoth(both), 6);
+  });
+
+  it("mirrors a flipped screw", () => {
+    const sym: LabelSymbol = { kind: "screw", headShape: "socket", drives: ["hex"] };
+    const a = renderSymbol(wasm, sym, 8).bounds();
+    const b = renderSymbol(wasm, { ...sym, flip: true }, 8).bounds();
+    expect(b.min[0]).toBeCloseTo(-a.max[0], 6);
+    expect(b.max[0]).toBeCloseTo(-a.min[0], 6);
+  });
+
+  it("turns old head, hex head and Cullenect bolt symbols into screws", () => {
+    const old = (kind: string, rest: object = {}) => ({ kind, ...rest }) as unknown as LabelSymbol;
+    expect(migrateSymbol(old("head", { drives: ["torx"] }))).toEqual({ kind: "screw", view: "drive", drives: ["torx"] });
+    expect(migrateSymbol(old("hexhead", { drives: [] }))).toMatchObject({ view: "drive", hexHead: true });
+    const bolt = migrateSymbol(old("cullbolt", { headShape: "socket", drives: ["hex"] }));
+    expect(bolt).toMatchObject({ kind: "screw", style: "cullenect", view: "side", flip: true, drives: ["hex"] });
+    expect(renderSymbol(wasm, bolt, 8).isEmpty()).toBe(false);
+  });
+
+  it("turns old nut symbols into nut types", () => {
+    const old = (kind: string) => migrateSymbol({ kind } as unknown as LabelSymbol);
+    expect(old("nutProfile")).toEqual({ kind: "nut", nutView: "side" });
+    expect(old("locknutProfile")).toEqual({ kind: "nut", nutType: "lock", nutView: "side" });
+    expect(old("squareNut")).toEqual({ kind: "nut", nutType: "square" });
+    expect(old("tnut")).toEqual({ kind: "nut", nutType: "tnut" });
+  });
+
   it("draws a bolt to length, and breaks it when it is too long", () => {
     const short = renderSymbol(wasm, { kind: "bolt", headShape: "socket", length: 12 }, 8, 40).bounds();
     expect(short.max[0] - short.min[0]).toBeCloseTo(12 + 8 / 2.25, 3);
@@ -66,7 +114,7 @@ describe("renderSymbol", () => {
 });
 
 describe("labels with symbols", () => {
-  const withBolt = { ...DEFAULT_OPTIONS, symbols: [{ kind: "cullbolt", headShape: "socket", drives: ["hex"] }] as LabelSymbol[] };
+  const withBolt = { ...DEFAULT_OPTIONS, symbols: [{ kind: "screw", style: "cullenect", view: "side", headShape: "socket", drives: ["hex"] }] as LabelSymbol[] };
 
   it("puts symbols and text side by side inside the margins", () => {
     for (const symbolPosition of ["left", "right"] as const) {

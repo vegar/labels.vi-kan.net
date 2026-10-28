@@ -1,4 +1,5 @@
 import { DEFAULT_OPTIONS, type LabelOptions } from "./label";
+import { migrateSymbol } from "./symbols";
 
 export type Weight = "regular" | "bold";
 
@@ -31,6 +32,7 @@ export function loadState(): LabelState {
       if (!Array.isArray(state.symbols) || JSON.stringify(state.symbols) === OLD_DEFAULT_SYMBOLS) {
         state.symbols = DEFAULT_STATE.symbols;
       }
+      state.symbols = state.symbols.map(migrateSymbol);
       return state;
     }
   } catch {
