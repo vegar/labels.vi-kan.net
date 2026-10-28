@@ -1,16 +1,19 @@
+import { useState } from "react";
 import { labelTitle, type LabelState } from "../state";
+import { CloneDialog } from "./CloneDialog";
 
 interface Props {
   labels: LabelState[];
   selected: string;
   onSelect: (id: string) => void;
   onAdd: () => void;
-  onDuplicate: (id: string) => void;
+  onClone: (id: string, texts: string[]) => void;
   onRemove: (id: string) => void;
 }
 
 /** All labels in this session. Click one to edit it. */
-export function LabelList({ labels, selected, onSelect, onAdd, onDuplicate, onRemove }: Props) {
+export function LabelList({ labels, selected, onSelect, onAdd, onClone, onRemove }: Props) {
+  const [cloning, setCloning] = useState<LabelState>();
   return (
     <section>
       <h2>
@@ -26,7 +29,7 @@ export function LabelList({ labels, selected, onSelect, onAdd, onDuplicate, onRe
               <span className="label-title">{labelTitle(label)}</span>
             </button>
             <div className="symbol-actions">
-              <button type="button" title="Duplicate" aria-label="Duplicate" onClick={() => onDuplicate(label.id)}>
+              <button type="button" title="Clone with new texts" aria-label="Clone" onClick={() => setCloning(label)}>
                 ⧉
               </button>
               <button
@@ -45,6 +48,13 @@ export function LabelList({ labels, selected, onSelect, onAdd, onDuplicate, onRe
       <button type="button" className="add-label" onClick={onAdd}>
         + Add label
       </button>
+      {cloning && (
+        <CloneDialog
+          source={cloning}
+          onClone={(texts) => onClone(cloning.id, texts)}
+          onClose={() => setCloning(undefined)}
+        />
+      )}
     </section>
   );
 }

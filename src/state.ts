@@ -107,17 +107,40 @@ export function blankLabel(template: LabelState): LabelState {
   };
 }
 
+/**
+ * Texts typed into the clone dialog: one label per line, with "|" starting a
+ * new line on the label. Blank lines are skipped.
+ */
+export function parseCloneTexts(input: string): string[] {
+  return input
+    .split("\n")
+    .map((line) =>
+      line
+        .split("|")
+        .map((part) => part.trim())
+        .join("\n")
+        .trim(),
+    )
+    .filter(Boolean);
+}
+
+/**
+ * Copies of label `id` with each of `texts`, inserted after it. Everything but
+ * the text is kept. Selects the first copy.
+ */
+export function cloneLabel(session: Session, id: string, texts: string[]): Session {
+  const at = session.labels.findIndex((l) => l.id === id);
+  if (at < 0 || !texts.length) return session;
+  const copies = texts.map((text) => ({ ...session.labels[at], id: newId(), text }));
+  const labels = [...session.labels.slice(0, at + 1), ...copies, ...session.labels.slice(at + 1)];
+  return { labels, selected: copies[0].id };
+}
+
 /** Insert `label` after the selected one and select it. */
 export function addLabel(session: Session, label: LabelState): Session {
   const at = session.labels.findIndex((l) => l.id === session.selected) + 1;
   const labels = [...session.labels.slice(0, at), label, ...session.labels.slice(at)];
   return { labels, selected: label.id };
-}
-
-export function duplicateLabel(session: Session, id: string): Session {
-  const source = session.labels.find((l) => l.id === id);
-  if (!source) return session;
-  return addLabel({ ...session, selected: id }, { ...source, id: newId() });
 }
 
 /** Remove a label, selecting its neighbour. The last label can't be removed. */

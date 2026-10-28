@@ -5,7 +5,7 @@ import { maxEmbeddedDepth } from "./label";
 import {
   addLabel,
   blankLabel,
-  duplicateLabel,
+  cloneLabel,
   fileName,
   loadSession,
   removeLabel,
@@ -85,7 +85,7 @@ export function App() {
           selected={state.id}
           onSelect={(id) => setSession((s) => ({ ...s, selected: id }))}
           onAdd={() => setSession((s) => addLabel(s, blankLabel(state)))}
-          onDuplicate={(id) => setSession((s) => duplicateLabel(s, id))}
+          onClone={(id, texts) => setSession((s) => cloneLabel(s, id, texts))}
           onRemove={(id) => setSession((s) => removeLabel(s, id))}
         />
 
