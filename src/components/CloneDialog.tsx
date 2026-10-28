@@ -49,7 +49,7 @@ export function CloneDialog({ source, onClone, onClose }: Props) {
             }}
           />
         </label>
-        <p className="hint">The new labels get the same size, symbols, style and colours.</p>
+        <p className="hint">Each text replaces the first text on the label. Symbols, size, style and colours stay the same.</p>
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
             Cancel

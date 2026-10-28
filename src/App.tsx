@@ -22,7 +22,7 @@ import { PreviewCanvas } from "./components/PreviewCanvas";
 import type { PreviewLabel, RowLayout } from "./preview";
 import { Segmented } from "./components/Segmented";
 import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
-import { SymbolEditor } from "./components/SymbolEditor";
+import { SegmentEditor } from "./components/SegmentEditor";
 
 /** Below this letter height, text gets hard to read with a 0.4 mm nozzle. */
 const MIN_LEGIBLE_CAP_HEIGHT = 4.4;
@@ -150,20 +150,16 @@ export function App() {
           </label>
         </section>
 
+        <SegmentEditor
+          wasm={engine?.wasm}
+          segments={state.segments}
+          gap={state.gap}
+          symbolSize={state.symbolSize}
+          onChange={update}
+        />
+
         <section>
           <h2>Text</h2>
-          <label className="field">
-            <span>
-              Text <small>(one line per row)</small>
-            </span>
-            <textarea
-              id="text"
-              rows={2}
-              spellCheck={false}
-              value={state.text}
-              onChange={(e) => update({ text: e.target.value })}
-            />
-          </label>
           <div className="row">
             <div className="field">
               <span>Align</span>
@@ -209,14 +205,6 @@ export function App() {
             </p>
           )}
         </section>
-
-        <SymbolEditor
-          wasm={engine?.wasm}
-          symbols={state.symbols}
-          position={state.symbolPosition}
-          size={state.symbolSize}
-          onChange={update}
-        />
 
         <section>
           <h2>Print style</h2>

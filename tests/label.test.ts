@@ -17,7 +17,7 @@ beforeAll(async () => {
 
 describe("buildLabel", () => {
   it("builds a 1U cullenect body of the right size", () => {
-    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "" });
+    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, segments: [] });
     const box = base.boundingBox();
     expect(box.max[0] - box.min[0]).toBeCloseTo(36, 3);
     expect(box.max[1] - box.min[1]).toBeCloseTo(11, 3);
@@ -27,13 +27,13 @@ describe("buildLabel", () => {
   });
 
   it("scales width with units", () => {
-    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, units: 3, text: "" });
+    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, units: 3, segments: [] });
     const box = base.boundingBox();
     expect(box.max[0] - box.min[0]).toBeCloseTo(120, 3);
   });
 
   it("embeds text flush with the face and keeps the total volume", () => {
-    const empty = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "" });
+    const empty = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, segments: [] });
     const { base, text } = buildLabel(wasm, font, DEFAULT_OPTIONS);
     expect(text).toBeDefined();
     const tb = text!.boundingBox();
@@ -45,7 +45,7 @@ describe("buildLabel", () => {
   it("keeps text inside the margins and under the max cap height", () => {
     const { text, capHeight } = buildLabel(wasm, font, {
       ...DEFAULT_OPTIONS,
-      text: "A very long label that must shrink",
+      segments: [{ kind: "text", text: "A very long label that must shrink" }],
     });
     const tb = text!.boundingBox();
     expect(tb.min[0]).toBeGreaterThanOrEqual(-18 + 0.8 - 1e-3);
@@ -91,7 +91,7 @@ describe("export", () => {
 
   it("puts every label in the 3MF as its own object", () => {
     const a = buildLabel(wasm, font, DEFAULT_OPTIONS);
-    const b = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "M4", units: 2 });
+    const b = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, segments: [{ kind: "text", text: "M4" }], units: 2 });
     const files = unzipSync(
       to3mf("test", [
         {
@@ -133,7 +133,7 @@ describe("export", () => {
 
   it("lays labels out back to front without overlapping", () => {
     const labels = Array.from({ length: 20 }, (_, i) => {
-      const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "", units: (i % 3) + 1 });
+      const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, segments: [], units: (i % 3) + 1 });
       return { name: `l${i}`, parts: [{ name: "label", manifold: base, color: "#202020" }] };
     });
     const layout = plateLayout(labels);
@@ -160,7 +160,7 @@ describe("export", () => {
   });
 
   it("zips STLs in a folder per label, numbering repeated names", () => {
-    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, text: "" });
+    const { base } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, segments: [] });
     const object = { name: "label-M3", parts: [{ name: "label", manifold: base, color: "#202020" }] };
     const files = unzipSync(toStlZip([object, object]));
     expect(Object.keys(files).sort()).toEqual(["label-M3-2/label.stl", "label-M3/label.stl"]);

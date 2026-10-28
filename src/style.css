@@ -372,6 +372,17 @@ footer a {
   width: 36px;
 }
 
+.symbol-head .grow {
+  margin-left: auto;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.symbol-head .grow + .symbol-actions {
+  margin-left: 4px;
+}
+
 .symbol-actions {
   margin-left: auto;
   display: flex;

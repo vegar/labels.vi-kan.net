@@ -2,24 +2,44 @@ import type { Font } from "opentype.js";
 import type { CrossSection, Manifold, ManifoldToplevel } from "manifold-3d";
 import { cullenectBody, HEIGHT, widthForUnits } from "./cullenect";
 import { isVariableWidth, renderSymbol, type LabelSymbol } from "./symbols";
-import { layoutText, type Align } from "./text";
+import { textBlock, type Align } from "./text";
 
 export type LabelStyle = "embedded" | "raised";
-export type SymbolPosition = "left" | "right";
+
+interface SegmentOptions {
+  /** Take a share of the spare width. Without any growing segments, the row is packed together. */
+  grow?: boolean;
+}
+
+/** A piece of text on the label. "\n" starts a new line within it. */
+export interface TextSegment extends SegmentOptions {
+  kind: "text";
+  text: string;
+}
+
+/** What goes on the label, left to right: text and symbols in any order. */
+export type Segment = TextSegment | (LabelSymbol & SegmentOptions);
+
+export function isText(segment: Segment): segment is TextSegment {
+  return segment.kind === "text";
+}
 
 export interface LabelOptions {
   units: number;
   ribs: boolean;
-  text: string;
+  segments: Segment[];
+  /**
+   * Where the row sits on the label, or each growing segment in its share
+   * of the spare width. Also how the lines of a text line up.
+   */
   align: Align;
+  /** Space between segments, in mm. */
+  gap: number;
   maxCapHeight: number;
   margin: number;
   style: LabelStyle;
   /** Depth of embedded text, or height of raised text, in mm. */
   textDepth: number;
-  /** Fastener symbols, drawn in a row beside the text. */
-  symbols: LabelSymbol[];
-  symbolPosition: SymbolPosition;
   /** Row height for the symbols, in mm. Symbols shrink below this to fit. */
   symbolSize: number;
 }
@@ -27,14 +47,13 @@ export interface LabelOptions {
 export const DEFAULT_OPTIONS: LabelOptions = {
   units: 1,
   ribs: true,
-  text: "M3 × 12",
+  segments: [{ kind: "text", text: "M3 × 12" }],
   align: "center",
+  gap: 1,
   maxCapHeight: 6,
   margin: 0.8,
   style: "embedded",
   textDepth: 0.2,
-  symbols: [],
-  symbolPosition: "left",
   symbolSize: 7,
 };
 
@@ -55,117 +74,106 @@ export interface LabelParts {
   capHeight?: number;
 }
 
-interface Box {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
+function size(shape: CrossSection): { width: number; height: number } {
+  const { min, max } = shape.bounds();
+  return { width: max[0] - min[0], height: max[1] - min[1] };
 }
 
-function box(shape: CrossSection): Box {
-  const b = shape.bounds();
-  return { minX: b.min[0], maxX: b.max[0], minY: b.min[1], maxY: b.max[1] };
+/** Center a shape on the origin. */
+function centered(shape: CrossSection): CrossSection {
+  const { min, max } = shape.bounds();
+  return shape.translate(-(min[0] + max[0]) / 2, -(min[1] + max[1]) / 2);
 }
 
-/**
- * Lay the symbols out in a row, left edge at x = 0 and centered on y = 0.
- * Variable-width symbols (bolts) share `variableBudget` mm between them.
- */
-function symbolRow(
-  wasm: ManifoldToplevel,
-  symbols: LabelSymbol[],
-  height: number,
-  gap: number,
-  variableBudget: number,
-): CrossSection {
-  const variableCount = symbols.filter(isVariableWidth).length;
-  const each = variableCount ? variableBudget / variableCount : 0;
-  const shapes: CrossSection[] = [];
-  let x = 0;
-  for (const sym of symbols) {
-    const shape = renderSymbol(wasm, sym, height, each);
-    const b = box(shape);
-    shapes.push(shape.translate(x - b.minX, -(b.minY + b.maxY) / 2));
-    x += b.maxX - b.minX + gap;
-  }
-  return wasm.CrossSection.union(shapes);
-}
-
-/** Total width of the fixed-size symbols and the gaps between all symbols. */
-function fixedRowWidth(wasm: ManifoldToplevel, symbols: LabelSymbol[], height: number, gap: number): number {
-  let width = gap * (symbols.length - 1);
-  for (const sym of symbols) {
-    if (isVariableWidth(sym)) continue;
-    const b = box(renderSymbol(wasm, sym, height));
-    width += b.maxX - b.minX;
-  }
-  return width;
-}
+type Item = { grow: boolean } & ({ text: true; shape: CrossSection } | { text: false; symbol: LabelSymbol });
 
 /**
- * Lay out the symbols and text in the label's face area. Symbols sit at one
- * edge; the text fills the rest of the width.
+ * Lay out the segments in a row across the label's face area. Symbols keep
+ * their size and the text fits in the rest, all at one letter height. Spare
+ * width is shared by the growing segments, or left around the row.
  */
 function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
   const areaWidth = widthForUnits(opts.units) - 2 * opts.margin;
   const areaHeight = HEIGHT - 2 * opts.margin;
-  const lines = opts.text.split("\n");
-  const textLayout = (width: number) =>
-    layoutText(wasm, font, {
-      lines,
-      align: opts.align,
-      areaWidth: width,
-      areaHeight,
-      maxCapHeight: opts.maxCapHeight,
-    });
 
-  if (opts.symbols.length === 0) {
-    const text = textLayout(areaWidth);
-    return { text: text?.shape, capHeight: text?.capHeight };
+  // Text at a cap height of 1 mm; empty text takes no room.
+  const items: Item[] = [];
+  for (const seg of opts.segments) {
+    const grow = !!seg.grow;
+    if (!isText(seg)) items.push({ grow, text: false, symbol: seg });
+    else {
+      const shape = textBlock(wasm, font, seg.text, opts.align);
+      if (shape) items.push({ grow, text: true, shape });
+    }
   }
+  if (items.length === 0) return {};
 
+  const texts = items.filter((it) => it.text);
+  const symbols = items.filter((it) => !it.text);
   const height = Math.min(opts.symbolSize, areaHeight);
-  const gap = height * 0.2;
-  const textGap = Math.max(1, height * 0.15);
+  const gap = Math.max(0, opts.gap);
+  const gapWidth = gap * (items.length - 1);
+  const symbolGapWidth = gap * items.slice(1).filter((it, i) => !it.text && !items[i].text).length;
+
+  const textInk = texts.map((it) => size(it.shape));
+  const inkWidth = textInk.reduce((a, b) => a + b.width, 0);
+  const maxCap = Math.min(opts.maxCapHeight, ...textInk.map((b) => areaHeight / b.height));
 
   // Bolts get whatever the text leaves at its full size, but never less
   // than a third of the label, so they don't collapse to a stub.
-  const natural = textLayout(1e4);
-  const fixed = fixedRowWidth(wasm, opts.symbols, height, gap);
-  let budget: number;
-  if (natural) {
-    const b = box(natural.shape);
-    budget = Math.max(areaWidth - fixed - textGap - (b.maxX - b.minX), areaWidth / 3);
-  } else {
-    budget = areaWidth - fixed;
-  }
+  const fixedWidth = symbols
+    .filter((it) => !isVariableWidth(it.symbol))
+    .reduce((w, it) => w + size(renderSymbol(wasm, it.symbol, height)).width, 0);
+  const budget = texts.length
+    ? Math.max(areaWidth - fixedWidth - gapWidth - maxCap * inkWidth, areaWidth / 3)
+    : areaWidth - fixedWidth - gapWidth;
+  const variableCount = symbols.filter((it) => isVariableWidth(it.symbol)).length;
+  const each = variableCount ? budget / variableCount : 0;
 
-  let row = symbolRow(wasm, opts.symbols, height, gap, budget);
-  let rb = box(row);
-  // Shrink the row if it is too tall (the Cullenect bolt is taller than the
-  // row height) or leaves too little room for the text.
-  const maxRowWidth = natural ? areaWidth * 0.7 : areaWidth;
-  const fit = Math.min(1, areaHeight / (rb.maxY - rb.minY), maxRowWidth / (rb.maxX - rb.minX));
-  if (fit < 1) {
-    row = row.scale(fit);
-    rb = box(row);
-  }
-  const rowWidth = rb.maxX - rb.minX;
+  // Shrink the symbols if they are too tall (the Cullenect bolt is taller
+  // than the row height) or leave too little room for the text.
+  let shapes = items.map((it) => (it.text ? it.shape : centered(renderSymbol(wasm, it.symbol, height, each))));
+  const symbolShapes = shapes.filter((_, i) => !items[i].text);
+  const symbolWidth = symbolShapes.reduce((w, s) => w + size(s).width, 0);
+  const symbolHeight = Math.max(0, ...symbolShapes.map((s) => size(s).height));
+  const symbolRoom = Math.max((texts.length ? areaWidth * 0.7 : areaWidth) - symbolGapWidth, areaWidth * 0.2);
+  const fit = symbols.length ? Math.min(1, areaHeight / symbolHeight, symbolRoom / symbolWidth) : 1;
 
-  const left = opts.symbolPosition === "left";
-  if (!natural) {
-    return { symbols: row.translate(-rowWidth / 2 - rb.minX, 0) };
-  }
+  const textRoom = Math.max(areaWidth - symbolWidth * fit - gapWidth, areaWidth * 0.1);
+  let capHeight = texts.length ? Math.min(maxCap, textRoom / inkWidth) : undefined;
+  shapes = shapes.map((s, i) => s.scale(items[i].text ? capHeight! : fit));
 
-  const textWidth = areaWidth - rowWidth - textGap;
-  const text = textLayout(textWidth)!;
-  const textCenter = left ? areaWidth / 2 - textWidth / 2 : -areaWidth / 2 + textWidth / 2;
-  const rowX = left ? -areaWidth / 2 : areaWidth / 2 - rowWidth;
-  return {
-    text: text.shape.translate(textCenter, 0),
-    symbols: row.translate(rowX - rb.minX, 0),
-    capHeight: text.capHeight,
+  // Spare width goes to the growing segments, shared evenly; without any,
+  // it is left around the row, as `align` says.
+  const widths = shapes.map((s) => size(s).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gapWidth;
+  const spare = Math.max(0, areaWidth - total);
+  const growing = items.filter((it) => it.grow).length;
+  const share = growing ? spare / growing : 0;
+  const rowWidth = growing ? Math.max(total, areaWidth) : total;
+  let x =
+    growing || opts.align === "center"
+      ? -rowWidth / 2
+      : opts.align === "left"
+        ? -areaWidth / 2
+        : areaWidth / 2 - rowWidth;
+
+  const placed = shapes.map((s, i) => {
+    const extra = items[i].grow ? share : 0;
+    const pad = opts.align === "left" ? 0 : opts.align === "right" ? extra : extra / 2;
+    const out = s.translate(x + pad + widths[i] / 2, 0);
+    x += widths[i] + extra + gap;
+    return out;
+  });
+
+  // Too many segments to fit: shrink the whole row, gaps and all.
+  const overflow = Math.min(1, areaWidth / rowWidth);
+  const union = (keep: boolean) => {
+    const parts = placed.filter((_, i) => items[i].text === keep);
+    return parts.length ? wasm.CrossSection.union(parts).scale(overflow) : undefined;
   };
+  if (capHeight !== undefined) capHeight *= overflow;
+  return { text: union(true), symbols: union(false), capHeight };
 }
 
 /**
