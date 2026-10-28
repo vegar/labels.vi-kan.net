@@ -1,7 +1,20 @@
 import { useMemo } from "react";
 import type { ManifoldToplevel } from "manifold-3d";
 import type { SymbolPosition } from "../label";
-import { DRIVES, renderSymbol, SYMBOLS, symbolInfo, toSvgPath, type Drive, type LabelSymbol } from "../symbols";
+import {
+  DRIVES,
+  renderSymbol,
+  SYMBOLS,
+  symbolInfo,
+  symbolModifiers,
+  toSvgPath,
+  type Drive,
+  type LabelSymbol,
+  type NutType,
+  type NutView,
+  type ScrewStyle,
+  type ScrewView,
+} from "../symbols";
 import { Segmented } from "./Segmented";
 
 const HEAD_LABELS = {
@@ -19,6 +32,13 @@ const MODIFIER_LABELS = {
   flanged: "Flanged",
   flip: "Flip",
 };
+
+const NUT_TYPES: { value: NutType; label: string }[] = [
+  { value: "regular", label: "Hex nut" },
+  { value: "lock", label: "Lock nut" },
+  { value: "square", label: "Square nut" },
+  { value: "tnut", label: "T-nut" },
+];
 
 /** A small drawing of a symbol, rendered with the same geometry as the label. */
 function SymbolIcon({ wasm, symbol }: { wasm: ManifoldToplevel; symbol: LabelSymbol }) {
@@ -89,6 +109,11 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
           <ol className="symbol-list">
             {symbols.map((sym, i) => {
               const info = symbolInfo(sym.kind);
+              const isScrew = sym.kind === "screw";
+              const view = isScrew ? (sym.view ?? "both") : undefined;
+              // A regular screw's side view has no drive; a Cullenect one shows it in the head.
+              const showsDrive = view !== "side" || sym.style === "cullenect";
+              const modifiers = symbolModifiers(sym);
               return (
                 <li key={i}>
                   <div className="symbol-head">
@@ -116,7 +141,75 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                     </div>
                   </div>
 
-                  {info.drives && (
+                  {isScrew && (
+                    <div className="row">
+                      <div className="field">
+                        <span>Style</span>
+                        <Segmented<ScrewStyle>
+                          value={sym.style ?? "regular"}
+                          options={[
+                            { value: "regular", label: "Regular" },
+                            { value: "cullenect", label: "Cullenect" },
+                          ]}
+                          onChange={(style) => patch(i, { style })}
+                        />
+                      </div>
+                      <div className="field">
+                        <span>Show</span>
+                        <Segmented<ScrewView>
+                          value={view!}
+                          options={[
+                            { value: "both", label: "Both" },
+                            { value: "drive", label: "Drive" },
+                            { value: "side", label: "Side" },
+                          ]}
+                          onChange={(view) => patch(i, { view })}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {sym.kind === "nut" && (
+                    <div className="row">
+                      <div className="field">
+                        <span>Type</span>
+                        <div className="icon-picker" role="group" aria-label="Nut type">
+                          {NUT_TYPES.map((t) => (
+                            <button
+                              key={t.value}
+                              type="button"
+                              title={t.label}
+                              aria-pressed={(sym.nutType ?? "regular") === t.value}
+                              onClick={() => patch(i, { nutType: t.value })}
+                            >
+                              {wasm && (
+                                <SymbolIcon
+                                  wasm={wasm}
+                                  symbol={{ kind: "nut", nutType: t.value, nutView: t.value === "lock" ? "side" : "top" }}
+                                />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {(sym.nutType ?? "regular") !== "square" && sym.nutType !== "tnut" && (
+                        <div className="field">
+                          <span>Show</span>
+                          <Segmented<NutView>
+                            value={sym.nutView ?? "top"}
+                            options={[
+                              { value: "both", label: "Both" },
+                              { value: "top", label: "Top" },
+                              { value: "side", label: "Side" },
+                            ]}
+                            onChange={(nutView) => patch(i, { nutView })}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {info.drives && showsDrive && (
                     <div className="field">
                       <span>Drive</span>
                       <div className="icon-picker" role="group" aria-label="Drive">
@@ -128,24 +221,24 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                             aria-pressed={!sym.hexHead && (sym.drives?.includes(d.value) ?? false)}
                             onClick={() => pickDrive(i, d.value)}
                           >
-                            {wasm && <SymbolIcon wasm={wasm} symbol={{ kind: "head", drives: [d.value] }} />}
+                            {wasm && <SymbolIcon wasm={wasm} symbol={{ kind: "screw", view: "drive", drives: [d.value] }} />}
                           </button>
                         ))}
-                        {sym.kind === "screw" && (
+                        {isScrew && (
                           <button
                             type="button"
                             title="Hex head bolt"
                             aria-pressed={!!sym.hexHead}
                             onClick={() => patch(i, { hexHead: !sym.hexHead, drives: [] })}
                           >
-                            {wasm && <SymbolIcon wasm={wasm} symbol={{ kind: "hexhead" }} />}
+                            {wasm && <SymbolIcon wasm={wasm} symbol={{ kind: "screw", view: "drive", hexHead: true }} />}
                           </button>
                         )}
                       </div>
                     </div>
                   )}
 
-                  {info.headShapes && !sym.hexHead && (
+                  {info.headShapes && !sym.hexHead && view !== "drive" && (
                     <div className="field">
                       <span>Head</span>
                       <div className="icon-picker wide" role="group" aria-label="Head">
@@ -160,7 +253,11 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                             {wasm && (
                               <SymbolIcon
                                 wasm={wasm}
-                                symbol={{ kind: "bolt", headShape: h, length: 14, tapping: sym.tapping }}
+                                symbol={
+                                  isScrew
+                                    ? { kind: "screw", style: sym.style, view: "side", headShape: h, tapping: sym.tapping }
+                                    : { kind: "bolt", headShape: h, length: 14, tapping: sym.tapping }
+                                }
                               />
                             )}
                           </button>
@@ -183,9 +280,9 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                     </label>
                   )}
 
-                  {(info.modifiers || info.drives) && (
+                  {(modifiers.length > 0 || (info.drives && showsDrive)) && (
                     <div className="row">
-                      {info.drives && (
+                      {info.drives && showsDrive && (
                         <label className="check">
                           <input
                             type="checkbox"
@@ -195,7 +292,7 @@ export function SymbolEditor({ wasm, symbols, position, size, onChange }: Props)
                           <span>Security pin</span>
                         </label>
                       )}
-                      {info.modifiers?.map((m) => (
+                      {modifiers.map((m) => (
                         <label key={m} className="check">
                           <input type="checkbox" checked={!!sym[m]} onChange={(e) => patch(i, { [m]: e.target.checked })} />
                           <span>{MODIFIER_LABELS[m]}</span>

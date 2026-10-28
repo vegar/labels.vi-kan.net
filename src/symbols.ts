@@ -5,21 +5,14 @@ import type { CrossSection, ManifoldToplevel, Vec2 } from "manifold-3d";
  * https://github.com/ndevenish/gflabel/blob/main/src/gflabel/fragments.py
  *
  * Every symbol is a 2D shape centered on the origin, drawn for a given row
- * height in mm. Some symbols (the Cullenect bolt) are taller than the row,
- * like in gflabel, and the layout scales them down to fit.
+ * height in mm. Cullenect-style screws are taller than the row, like in
+ * gflabel, and the layout scales them down to fit.
  */
 
 export type SymbolKind =
   | "screw"
-  | "head"
-  | "hexhead"
   | "bolt"
-  | "cullbolt"
   | "nut"
-  | "nutProfile"
-  | "locknutProfile"
-  | "squareNut"
-  | "tnut"
   | "washer"
   | "lockwasher"
   | "insert";
@@ -38,9 +31,30 @@ export type Drive =
 
 export type HeadShape = "pan" | "socket" | "countersunk" | "round" | "wafer";
 
+/** How a screw's side view is drawn: a plain bolt, or gflabel's threaded Cullenect bolt. */
+export type ScrewStyle = "regular" | "cullenect";
+
+/** Which drawings of a screw to show: the drive seen from above, the side view, or both. */
+export type ScrewView = "both" | "drive" | "side";
+
+export type NutType = "regular" | "lock" | "square" | "tnut";
+
+/** Which drawings of a hex nut to show: from above, from the side, or both. */
+export type NutView = "both" | "top" | "side";
+
+export type Modifier = "tapping" | "flip" | "partial" | "slotted" | "flanged";
+
 export interface LabelSymbol {
   kind: SymbolKind;
-  /** Drive recesses, for heads and the Cullenect bolt. */
+  /** Screw style (screw). Defaults to regular. */
+  style?: ScrewStyle;
+  /** Which views of the screw to draw (screw). Defaults to both. */
+  view?: ScrewView;
+  /** Nut type (nut). Defaults to regular. */
+  nutType?: NutType;
+  /** Which views of a regular or lock nut to draw (nut). Defaults to top. */
+  nutView?: NutView;
+  /** Drive recesses (screw). */
   drives?: Drive[];
   /** Head profile, for bolts. */
   headShape?: HeadShape;
@@ -50,7 +64,7 @@ export interface LabelSymbol {
   tapping?: boolean;
   /** Point the bolt the other way. */
   flip?: boolean;
-  /** Partly threaded (Cullenect bolt). */
+  /** Partly threaded (Cullenect screw). */
   partial?: boolean;
   /** Slotted head (bolt). */
   slotted?: boolean;
@@ -67,7 +81,7 @@ export interface SymbolInfo {
   drives?: boolean;
   headShapes?: HeadShape[];
   length?: boolean;
-  modifiers?: ("tapping" | "flip" | "partial" | "slotted" | "flanged")[];
+  modifiers?: Modifier[];
   defaults: LabelSymbol;
 }
 
@@ -77,16 +91,8 @@ export const SYMBOLS: SymbolInfo[] = [
     name: "Screw",
     drives: true,
     headShapes: ["countersunk", "socket", "pan", "round", "wafer"],
-    modifiers: ["tapping", "flanged"],
+    modifiers: ["tapping", "partial", "flanged", "flip"],
     defaults: { kind: "screw", headShape: "countersunk", drives: ["phillips"] },
-  },
-  {
-    kind: "cullbolt",
-    name: "Cullenect bolt",
-    drives: true,
-    headShapes: ["pan", "socket", "countersunk", "round"],
-    modifiers: ["tapping", "partial", "flip"],
-    defaults: { kind: "cullbolt", headShape: "socket", drives: [] },
   },
   {
     kind: "bolt",
@@ -96,13 +102,7 @@ export const SYMBOLS: SymbolInfo[] = [
     modifiers: ["tapping", "slotted", "flanged", "flip"],
     defaults: { kind: "bolt", headShape: "socket", length: 12 },
   },
-  { kind: "head", name: "Head", drives: true, defaults: { kind: "head", drives: ["hex"] } },
-  { kind: "hexhead", name: "Hex head", drives: true, defaults: { kind: "hexhead", drives: [] } },
   { kind: "nut", name: "Nut", defaults: { kind: "nut" } },
-  { kind: "nutProfile", name: "Nut (side)", defaults: { kind: "nutProfile" } },
-  { kind: "locknutProfile", name: "Lock nut (side)", defaults: { kind: "locknutProfile" } },
-  { kind: "squareNut", name: "Square nut", defaults: { kind: "squareNut" } },
-  { kind: "tnut", name: "T-nut", defaults: { kind: "tnut" } },
   { kind: "washer", name: "Washer", defaults: { kind: "washer" } },
   { kind: "lockwasher", name: "Lock washer", defaults: { kind: "lockwasher" } },
   { kind: "insert", name: "Threaded insert", defaults: { kind: "insert" } },
@@ -123,6 +123,33 @@ export const DRIVES: { value: Drive; label: string }[] = [
 
 export function symbolInfo(kind: SymbolKind): SymbolInfo {
   return SYMBOLS.find((s) => s.kind === kind)!;
+}
+
+/** The modifiers that apply to a symbol with its current style and view. */
+export function symbolModifiers(sym: LabelSymbol): Modifier[] {
+  const all = symbolInfo(sym.kind).modifiers ?? [];
+  if (sym.kind !== "screw") return all;
+  if (sym.view === "drive") return [];
+  const skip: Modifier = sym.style === "cullenect" ? "flanged" : "partial";
+  return all.filter((m) => m !== skip);
+}
+
+/**
+ * Bring symbols saved by older versions up to date. The separate head,
+ * hex head and Cullenect bolt symbols are now views and styles of the screw,
+ * and the separate nut symbols are types of the nut.
+ */
+export function migrateSymbol(sym: LabelSymbol): LabelSymbol {
+  const kind = sym.kind as string;
+  if (kind === "nutProfile") return { kind: "nut", nutView: "side" };
+  if (kind === "locknutProfile") return { kind: "nut", nutType: "lock", nutView: "side" };
+  if (kind === "squareNut") return { kind: "nut", nutType: "square" };
+  if (kind === "tnut") return { kind: "nut", nutType: "tnut" };
+  if (kind === "head") return { kind: "screw", view: "drive", drives: sym.drives };
+  if (kind === "hexhead") return { kind: "screw", view: "drive", hexHead: true, drives: sym.drives };
+  // The old Cullenect bolt pointed the other way.
+  if (kind === "cullbolt") return { ...sym, kind: "screw", style: "cullenect", view: "side", flip: !sym.flip };
+  return sym;
 }
 
 /** True for symbols that grow to fill the space they are given. */
@@ -342,10 +369,9 @@ function bolt(s: Sketcher, sym: LabelSymbol, height: number, maxWidth: number): 
   return sym.flip ? shape.scale(-1) : shape;
 }
 
-/** Cullenect-style fixed-length bolt with a visible drive. Drawn 1.6× the row height. */
-function cullbolt(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSection {
+/** Cullenect-style fixed-length bolt, head to the right, with an optional drive in the head. */
+function cullbolt(s: Sketcher, sym: LabelSymbol, height: number): CrossSection {
   const head = sym.headShape ?? "pan";
-  const height = rowHeight * 1.6;
   const width = 1.456 * height;
   const bodyW = 0.856 * height;
   let threads = 6;
@@ -406,28 +432,96 @@ function cullbolt(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSectio
     const recess = compoundDrive(s, sym.drives, (headW * 0.9) / 2, headW / 2);
     if (recess) shape = shape.subtract(recess.translate(width / 2 - headW / 2 - threadDepth / 2, 0));
   }
-  return sym.flip ? shape.scale(-1) : shape;
+  return shape;
 }
 
 /**
  * A screw shown as two separate drawings, like label.alch.shop: the head
- * seen from above with its drive, and the screw from the side.
+ * seen from above with its drive, and the screw from the side. Either can be
+ * hidden. The Cullenect style draws gflabel's threaded bolt 1.6× the row
+ * height; on its own it carries the drive in its head, like in gflabel.
  */
-function screw(s: Sketcher, sym: LabelSymbol, height: number): CrossSection {
-  const r = height / 2;
-  const top = sym.hexHead
-    ? withDrives(s, s.ngon(r, 6), sym.drives, r * 0.6, r)
-    : withDrives(s, s.circle(r), sym.drives, r * 0.7, r);
-
-  // The side view is a short bolt of fixed proportions, not drawn to length.
+function screw(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSection {
+  const view = sym.view ?? "both";
+  const cullenect = sym.style === "cullenect";
+  const height = cullenect && view !== "drive" ? rowHeight * 1.6 : rowHeight;
   const headShape = sym.hexHead ? "socket" : (sym.headShape ?? "countersunk");
-  const width = 1.6 * height;
-  const length = headShape === "countersunk" ? width : width - height / 2.25;
-  const side = bolt(s, { kind: "bolt", headShape, length, tapping: sym.tapping, flanged: sym.flanged }, height, Infinity);
 
-  const gap = height * 0.2;
-  const sideMinX = side.bounds().min[0];
-  return top.translate(-gap / 2 - r, 0).add(side.translate(gap / 2 - sideMinX, 0));
+  const r = height / 2;
+  const drive = () =>
+    sym.hexHead
+      ? withDrives(s, s.ngon(r, 6), sym.drives, r * 0.6, r)
+      : withDrives(s, s.circle(r), sym.drives, r * 0.7, r);
+
+  const side = () => {
+    if (cullenect) {
+      const drives = view === "side" && !sym.hexHead ? sym.drives : [];
+      const { tapping, partial } = sym;
+      return cullbolt(s, { kind: "screw", headShape, drives, tapping, partial }, height).scale([-1, 1]);
+    }
+    // A short bolt of fixed proportions, not drawn to length.
+    const width = 1.6 * height;
+    const length = headShape === "countersunk" ? width : width - height / 2.25;
+    const { tapping, flanged } = sym;
+    return bolt(s, { kind: "bolt", headShape, length, tapping, flanged }, height, Infinity);
+  };
+
+  let shape: CrossSection;
+  if (view === "drive") shape = drive();
+  else if (view === "side") shape = side();
+  else {
+    const top = drive();
+    const profile = side();
+    const gap = height * 0.2;
+    const sideMinX = profile.bounds().min[0];
+    shape = top.translate(-gap / 2 - r, 0).add(profile.translate(gap / 2 - sideMinX, 0));
+  }
+  return sym.flip ? shape.scale([-1, 1]) : shape;
+}
+
+/**
+ * A nut. Regular and lock nuts can be shown from above, from the side, or
+ * both side by side, like the screw; square and T-nuts only from above.
+ */
+function nut(s: Sketcher, sym: LabelSymbol, h: number): CrossSection {
+  const r = h / 2;
+  switch (sym.nutType ?? "regular") {
+    case "square":
+      return s.rect(h, h).subtract(s.circle(r * 0.55));
+    case "tnut":
+      return s
+        .rect(h * 0.6 - (2 * h) / 7, h - (2 * h) / 7)
+        .offset(h / 7, "Round", 2, SEGMENTS)
+        .subtract(s.circle(h * 0.2));
+  }
+
+  const top = () => s.ngon(r, 6).subtract(s.circle(r * 0.4));
+  const side = () => {
+    if (sym.nutType !== "lock") {
+      const w = h / 2.25;
+      return s.rect(w, h).subtract(s.rect(w, h / 10, 0, h / 4)).subtract(s.rect(w, h / 10, 0, -h / 4));
+    }
+    const w = (h / 2.25) * 1.5;
+    const cy = h * 0.2;
+    return s
+      .union([
+        s.rect((w * 2) / 3, h),
+        s.circle(w / 3, -w / 3, cy),
+        s.circle(w / 3, -w / 3, -cy),
+        s.rect(w / 3, 2 * cy, -w / 2, 0),
+      ])
+      .subtract(s.rect((w * 2) / 3, h / 10, 0, h / 4))
+      .subtract(s.rect((w * 2) / 3, h / 10, 0, -h / 4));
+  };
+
+  const view = sym.nutView ?? "top";
+  if (view === "top") return top();
+  if (view === "side") return side();
+  const profile = side();
+  const gap = h * 0.2;
+  return top()
+    .translate(-gap / 2 - r, 0)
+    .add(profile.translate(gap / 2 - profile.bounds().min[0], 0));
 }
 
 function threadedInsert(s: Sketcher, height: number): CrossSection {
@@ -482,40 +576,10 @@ export function renderSymbol(
   switch (sym.kind) {
     case "screw":
       return screw(s, sym, h);
-    case "head":
-      return withDrives(s, s.circle(r), sym.drives, r * 0.7, r);
-    case "hexhead":
-      return withDrives(s, s.ngon(r, 6), sym.drives, r * 0.6, r);
     case "bolt":
       return bolt(s, sym, h, maxWidth);
-    case "cullbolt":
-      return cullbolt(s, sym, h);
     case "nut":
-      return s.ngon(r, 6).subtract(s.circle(r * 0.4));
-    case "nutProfile": {
-      const w = h / 2.25;
-      return s.rect(w, h).subtract(s.rect(w, h / 10, 0, h / 4)).subtract(s.rect(w, h / 10, 0, -h / 4));
-    }
-    case "locknutProfile": {
-      const w = (h / 2.25) * 1.5;
-      const cy = h * 0.2;
-      return s
-        .union([
-          s.rect((w * 2) / 3, h),
-          s.circle(w / 3, -w / 3, cy),
-          s.circle(w / 3, -w / 3, -cy),
-          s.rect(w / 3, 2 * cy, -w / 2, 0),
-        ])
-        .subtract(s.rect((w * 2) / 3, h / 10, 0, h / 4))
-        .subtract(s.rect((w * 2) / 3, h / 10, 0, -h / 4));
-    }
-    case "squareNut":
-      return s.rect(h, h).subtract(s.circle(r * 0.55));
-    case "tnut":
-      return s
-        .rect(h * 0.6 - (2 * h) / 7, h - (2 * h) / 7)
-        .offset(h / 7, "Round", 2, SEGMENTS)
-        .subtract(s.circle(h * 0.2));
+      return nut(s, sym, h);
     case "washer":
       return s.circle(r).subtract(s.circle(r * 0.55));
     case "lockwasher": {
