@@ -28,9 +28,49 @@ function escapeXml(s: string): string {
 }
 
 /**
+ * Filament slot (1-based) for each part: the first part gets slot 1 and every
+ * further distinct colour gets the next slot, so same-coloured parts share one.
+ */
+function filamentSlots(parts: ExportPart[]): number[] {
+  const slots = new Map<string, number>();
+  return parts.map((p) => {
+    const key = p.color.toLowerCase();
+    if (!slots.has(key)) slots.set(key, slots.size + 1);
+    return slots.get(key)!;
+  });
+}
+
+/**
+ * Bambu Studio / OrcaSlicer per-part settings. They ignore core-spec material
+ * colours, but read this file even from 3MFs they did not write, and keep the
+ * part names and filament ("extruder") assignments from it. Part ids are the
+ * component object ids.
+ */
+function bambuModelSettings(assemblyId: number, name: string, parts: ExportPart[]): string {
+  const slots = filamentSlots(parts);
+  const volumes = parts
+    .map(
+      (p, i) => `  <part id="${i + 2}" subtype="normal_part">
+    <metadata key="name" value="${escapeXml(p.name)}"/>
+    <metadata key="extruder" value="${slots[i]}"/>
+  </part>`,
+    )
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+ <object id="${assemblyId}">
+  <metadata key="name" value="${escapeXml(name)}"/>
+  <metadata key="extruder" value="1"/>
+${volumes}
+ </object>
+</config>`;
+}
+
+/**
  * Build a core-spec 3MF holding one object made of several parts, each with
  * its own colour. Slicers open it as a single object with one part per
- * colour, ready to assign filaments to.
+ * colour; Bambu Studio and OrcaSlicer also get each colour on its own
+ * filament slot.
  */
 export function to3mf(name: string, parts: ExportPart[]): Uint8Array {
   const materials = parts
@@ -64,6 +104,7 @@ export function to3mf(name: string, parts: ExportPart[]): Uint8Array {
 <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`),
     "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(bambuModelSettings(assemblyId, name, parts)),
   });
 }
 

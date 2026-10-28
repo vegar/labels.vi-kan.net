@@ -83,6 +83,29 @@ describe("export", () => {
     expect(files["[Content_Types].xml"]).toBeDefined();
   });
 
+  it("assigns each colour its own Bambu filament slot", () => {
+    const { base, text } = buildLabel(wasm, font, DEFAULT_OPTIONS);
+    const files = unzipSync(
+      to3mf("test", [
+        { name: "base", manifold: base, color: "#202020" },
+        { name: "text", manifold: text!, color: "#FFFFFF" },
+        { name: "symbols", manifold: text!, color: "#ffffff" },
+      ]),
+    );
+    const settings = strFromU8(files["Metadata/model_settings.config"]);
+    // Object id is the assembly; part ids are the component object ids.
+    expect(settings).toContain('<object id="5">');
+    const parts = [...settings.matchAll(/<part id="(\d+)"[\s\S]*?key="extruder" value="(\d+)"/g)].map((m) => [
+      m[1],
+      m[2],
+    ]);
+    expect(parts).toEqual([
+      ["2", "1"],
+      ["3", "2"],
+      ["4", "2"],
+    ]);
+  });
+
   it("writes a binary STL with the right triangle count", () => {
     const { base } = buildLabel(wasm, font, DEFAULT_OPTIONS);
     const stl = toStl(base);
