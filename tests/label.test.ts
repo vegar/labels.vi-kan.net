@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { unzipSync, strFromU8 } from "fflate";
 import opentype from "opentype.js";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { ManifoldToplevel } from "manifold-3d";
+import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../src/manifold";
-import { buildLabel, DEFAULT_OPTIONS } from "../src/label";
+import { buildLabel, DEFAULT_OPTIONS, maxEmbeddedDepth } from "../src/label";
 import { plateLayout, to3mf, toStl, toStlZip } from "../src/export";
 
 let wasm: ManifoldToplevel;
@@ -65,6 +65,80 @@ describe("buildLabel", () => {
     const tb = text!.boundingBox();
     expect(tb.min[2]).toBeCloseTo(0, 3);
     expect(tb.max[2]).toBeCloseTo(0.2, 3);
+  });
+});
+
+describe("label holders", () => {
+  const blank = { ...DEFAULT_OPTIONS, segments: [] };
+  const size = (m: Manifold) => {
+    const { min, max } = m.boundingBox();
+    return [max[0] - min[0], max[1] - min[1], min[2], max[2]];
+  };
+
+  it("builds a Cullenect legacy body with three channels, whatever the width", () => {
+    const { base } = buildLabel(wasm, font, { ...blank, base: "cullenect-legacy", units: 3 });
+    const [w, h, bottom, top] = size(base);
+    expect(base.status()).toBe("NoError");
+    expect(w).toBeCloseTo(36.4, 3);
+    expect(h).toBeCloseTo(11, 3);
+    expect(bottom).toBeCloseTo(-1, 3);
+    expect(top).toBeCloseTo(0, 3);
+    // The plate less three channels of 0.9 × 0.2 + 2 × 0.4 mm² each, the length of the label.
+    const plate = wasm.CrossSection.square([36.4, 11], true).offset(0, "Round").area();
+    expect(base.volume()).toBeLessThan(plate - 3 * 0.9 * 11);
+    expect(base.volume()).toBeGreaterThan(plate - 3 * 1.1 * 11 - 1);
+  });
+
+  it("fits Gridfinity Extended's Cullenect legacy pocket", () => {
+    // 36.7 × 11.3 mm plus 0.3 mm padding.
+    const { base } = buildLabel(wasm, font, { ...blank, base: "cullenect-legacy" });
+    const [w, h] = size(base);
+    expect(w).toBeLessThan(37);
+    expect(h).toBeLessThan(11.6);
+  });
+
+  it("builds a flat pred body with tabs, 42 mm a unit less 4.2", () => {
+    for (const units of [1, 2, 3]) {
+      const { base } = buildLabel(wasm, font, { ...blank, base: "pred", units });
+      const [w, h, bottom, top] = size(base);
+      expect(base.status()).toBe("NoError");
+      expect(w).toBeCloseTo(units * 42 - 4.2, 3);
+      expect(h).toBeCloseTo(11, 3);
+      expect(bottom).toBeCloseTo(-0.8, 3);
+      expect(top).toBeCloseTo(0, 3);
+      // Gridfinity Extended's pred pocket: 42u - 5.8 by 11.35 mm, with 1 × 6.7 mm tabs at the ends.
+      const ends = base.trimByPlane([1, 0, 0], (units * 42 - 5.8) / 2);
+      expect(size(ends)[1]).toBeLessThan(6.7);
+    }
+  });
+
+  it("sinks a pred label's face below a rim for raised text", () => {
+    const { base, text } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, base: "pred", style: "raised" });
+    const [, , bottom, top] = size(base);
+    expect(bottom).toBeCloseTo(-0.4, 3);
+    expect(top).toBeCloseTo(0.4, 3);
+    expect(text!.boundingBox().min[2]).toBeCloseTo(0, 3);
+    // The face, at z = 0, is the top of the body in the middle.
+    const middle = base.trimByPlane([0, 0, 1], -0.1).intersect(wasm.Manifold.cube([4, 4, 2], true));
+    expect(middle.boundingBox().max[2]).toBeCloseTo(0, 3);
+  });
+
+  it("keeps text clear of a pred label's holes", () => {
+    const { text } = buildLabel(wasm, font, {
+      ...DEFAULT_OPTIONS,
+      base: "pred",
+      segments: [{ kind: "text", text: "A very long label that must shrink" }],
+    });
+    const tb = text!.boundingBox();
+    expect(tb.min[0]).toBeGreaterThanOrEqual(-(37.8 - 5.5) / 2);
+    expect(tb.max[0]).toBeLessThanOrEqual((37.8 - 5.5) / 2);
+  });
+
+  it("limits flush text to leave material at the back", () => {
+    expect(maxEmbeddedDepth({ base: "cullenect-legacy", units: 1, ribs: false })).toBeCloseTo(0.3);
+    expect(maxEmbeddedDepth({ base: "pred", units: 1, ribs: true })).toBeCloseTo(0.6);
+    const { text } = buildLabel(wasm, font, { ...DEFAULT_OPTIONS, base: "pred", textDepth: 1 });
+    expect(text!.boundingBox().min[2]).toBeCloseTo(-0.6, 3);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { HEIGHT, widthForUnits } from "./cullenect";
+import { BASE_KINDS, baseInfo, type BaseKind } from "./bases";
 import { to3mf, toStlZip, type ExportObject } from "./export";
 import { maxEmbeddedDepth } from "./label";
 import {
@@ -56,7 +56,7 @@ export function App() {
         const built = builds.get(label.id)?.parts;
         return {
           id: label.id,
-          width: widthForUnits(label.units),
+          ...baseInfo(label.base).size(label.units),
           parts: built
             ? [
                 { manifold: built.base, color: label.baseColor },
@@ -68,6 +68,9 @@ export function App() {
       }),
     [session.labels, builds],
   );
+
+  const base = baseInfo(state.base);
+  const size = base.size(state.units);
 
   // Flush text over the snap-fit channels can only go so deep.
   const maxDepth = state.style === "embedded" ? maxEmbeddedDepth(state) : 1;
@@ -112,7 +115,7 @@ export function App() {
       <aside className="panel">
         <header>
           <h1>Gridfinity Labels</h1>
-          <p className="sub">Cullenect label, ready for multi-colour printing.</p>
+          <p className="sub">Cullenect and pred labels, ready for multi-colour printing.</p>
         </header>
 
         <LabelList
@@ -127,27 +130,40 @@ export function App() {
         <section>
           <h2>Label</h2>
           <div className="field">
-            <span>Bin width</span>
-            <Segmented
-              value={state.units}
-              options={[1, 2, 3].map((u) => ({ value: u, label: `${u}U` }))}
-              onChange={(units) => update({ units })}
+            <span>Label holder</span>
+            <Segmented<BaseKind>
+              value={state.base}
+              options={BASE_KINDS.map((kind) => ({ value: kind, label: baseInfo(kind).name }))}
+              // The legacy label only comes in one size, for 1U bins.
+              onChange={(kind) => update(baseInfo(kind).oneSize ? { base: kind, units: 1 } : { base: kind })}
             />
           </div>
+          {!base.oneSize && (
+            <div className="field">
+              <span>Bin width</span>
+              <Segmented
+                value={state.units}
+                options={[1, 2, 3].map((u) => ({ value: u, label: `${u}U` }))}
+                onChange={(units) => update({ units })}
+              />
+            </div>
+          )}
           <p className="hint">
-            {widthForUnits(state.units)} × {HEIGHT} mm
+            {+size.width.toFixed(1)} × {size.height} mm{base.oneSize && ", for 1U bins"}
           </p>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={state.ribs}
-              disabled={state.units !== 1}
-              onChange={(e) => update({ ribs: e.target.checked })}
-            />
-            <span>
-              Snap-fit channels on the back <small>(1U only)</small>
-            </span>
-          </label>
+          {state.base === "cullenect" && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={state.ribs}
+                disabled={state.units !== 1}
+                onChange={(e) => update({ ribs: e.target.checked })}
+              />
+              <span>
+                Snap-fit channels on the back <small>(1U only)</small>
+              </span>
+            </label>
+          )}
         </section>
 
         <SegmentEditor
@@ -220,6 +236,7 @@ export function App() {
             {state.style === "embedded"
               ? "Text is flush with the surface. Print face up and assign filaments to the text and symbol parts."
               : "Text stands proud of the surface. Works with a filament swap at the text layer, or as a second part."}
+            {state.style === "raised" && state.base === "pred" && " The face of a pred label sits 0.4 mm below a rim."}
           </p>
           <label className="field">
             <span>
@@ -274,7 +291,8 @@ export function App() {
 
         <footer>
           Label geometry from <a href="https://github.com/ndevenish/gflabel">gflabel</a> (BSD-3). Cullenect system by{" "}
-          <a href="https://makerworld.com/en/models/446624">Cullen J Webb</a>.
+          <a href="https://makerworld.com/en/models/446624">Cullen J Webb</a>, pred labels by{" "}
+          <a href="https://www.printables.com/model/592545">pred</a>.
         </footer>
       </aside>
       <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />

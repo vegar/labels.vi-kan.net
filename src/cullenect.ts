@@ -1,8 +1,8 @@
 import type { CrossSection, Manifold, ManifoldToplevel } from "manifold-3d";
 
 /**
- * Cullenect label body, ported from gflabel's `cullenect` base (v2.0.0),
- * which follows Cullen J Webb's swappable label system:
+ * Cullenect label bodies, ported from gflabel's `cullenect` base (v2.0.0 and
+ * v1.1), which follows Cullen J Webb's swappable label system:
  * https://makerworld.com/en/models/446624
  *
  * Geometry is centered on the origin in X/Y with the label face at z = 0
@@ -61,6 +61,44 @@ export function cullenectBody(wasm: ManifoldToplevel, opts: CullenectOptions): M
       const channel = slot.add(wide);
       body = body.subtract(channel);
     }
+  }
+  return body;
+}
+
+/** The v1.1 label: one size, for 1U bins only. */
+export const LEGACY_WIDTH = 36.4;
+const LEGACY_DEPTH = 1;
+
+/**
+ * Cullenect v1.1 label body (gflabel's `--version v1.1`). Thinner than v2,
+ * without the edge step, and always with the three snap-fit channels.
+ * gflabel's 0.5 mm fillets where the channels leave the edges are left out.
+ */
+export function cullenectLegacyBody(wasm: ManifoldToplevel): Manifold {
+  let body = roundedRect(wasm, LEGACY_WIDTH, HEIGHT, CORNER_RADIUS)
+    .extrude(LEGACY_DEPTH)
+    .translate(0, 0, -LEGACY_DEPTH);
+  for (const x of RIB_POSITIONS) {
+    // The same T-shaped channel as v2, 0.2 mm higher up the thinner body.
+    // The lip between its narrow and wide part is chamfered (0.1 mm across,
+    // the full 0.2 mm down), so the slot widens from 1 mm at the back.
+    const profile = new wasm.CrossSection([
+      [
+        [x - 0.5, -1.01],
+        [x + 0.5, -1.01],
+        [x + 0.5, -1],
+        [x + 0.6, -0.8],
+        [x + 1, -0.8],
+        [x + 1, -0.4],
+        [x - 1, -0.4],
+        [x - 1, -0.8],
+        [x - 0.6, -0.8],
+        [x - 0.5, -1],
+      ],
+    ]);
+    // Profile drawn in x/z, run along y through the whole label.
+    const channel = profile.extrude(HEIGHT + 2, 0, 0, [1, 1], true).rotate([90, 0, 0]);
+    body = body.subtract(channel);
   }
   return body;
 }
