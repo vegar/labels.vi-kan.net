@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Segmented } from "./Segmented";
 
 interface Resource {
   name: string;
@@ -111,8 +112,14 @@ function ResourceList({ items }: { items: Resource[] }) {
   );
 }
 
-/** Credits and the reasons behind some design choices. */
+type Tab = "credits" | "choices";
+
+/**
+ * Credits and the reasons behind some design choices: two columns side by
+ * side on wide screens, tabs on narrow ones.
+ */
 export function About() {
+  const [tab, setTab] = useState<Tab>("credits");
   return (
     <div className="about">
       <article>
@@ -120,29 +127,45 @@ export function About() {
           ← Back to the label maker
         </a>
         <h1>About Gridfinity Labels</h1>
+        <div className="about-tabs">
+          <Segmented<Tab>
+            value={tab}
+            options={[
+              { value: "credits", label: "Inspiration and reference" },
+              { value: "choices", label: "Choices we made" },
+            ]}
+            onChange={setTab}
+          />
+        </div>
         <p>
           A browser-based label maker for Gridfinity bins: type your text, see the label in 3D, and download a file
           ready for multi-colour printing.
         </p>
 
-        <h2>Inspiration and reference</h2>
-        <ResourceList items={INSPIRATION} />
+        <div className="about-columns" data-tab={tab}>
+          <section className="credits">
+            <h2>Inspiration and reference</h2>
+            <ResourceList items={INSPIRATION} />
 
-        <h2>Label holders</h2>
-        <ResourceList items={HOLDERS} />
+            <h2>Label holders</h2>
+            <ResourceList items={HOLDERS} />
 
-        <h2>Built with</h2>
-        <ResourceList items={LIBRARIES} />
+            <h2>Built with</h2>
+            <ResourceList items={LIBRARIES} />
+          </section>
 
-        <h2>Choices we made</h2>
-        <dl className="choices">
-          {CHOICES.map((c) => (
-            <div key={c.title}>
-              <dt>{c.title}</dt>
-              <dd>{c.text}</dd>
-            </div>
-          ))}
-        </dl>
+          <section className="choices">
+            <h2>Choices we made</h2>
+            <dl>
+              {CHOICES.map((c) => (
+                <div key={c.title}>
+                  <dt>{c.title}</dt>
+                  <dd>{c.text}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
 
         <p className="sub">
           Source code on <a href="https://github.com/vegar/labels.vi-kan.net">GitHub</a>.
