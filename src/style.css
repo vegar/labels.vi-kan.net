@@ -582,3 +582,76 @@ input[type="number"] {
   opacity: 0.5;
   cursor: default;
 }
+
+/* About page: covers the app so returning keeps the preview as it was. */
+.about {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 32px 16px 48px;
+}
+
+.about article {
+  max-width: 720px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.about h1 {
+  font-size: 1.6rem;
+  margin: 12px 0 8px;
+}
+
+.about h2 {
+  margin-top: 28px;
+}
+
+.about a {
+  color: var(--accent);
+}
+
+.about .back {
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.about .resources {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.about .resources li {
+  display: flex;
+  flex-direction: column;
+}
+
+.about .resources a {
+  font-weight: 600;
+}
+
+.about .resources span,
+.about dd {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.about .choices {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.about dt {
+  font-weight: 600;
+}
+
+.about dd {
+  margin: 2px 0 0;
+}
