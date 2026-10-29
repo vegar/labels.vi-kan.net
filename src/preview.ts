@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Manifold } from "manifold-3d";
-import { HEIGHT } from "./cullenect";
 
 export interface PreviewPart {
   manifold: Manifold;
@@ -13,6 +12,7 @@ export interface PreviewLabel {
   /** Empty while the label is still building or failed to build. */
   parts: PreviewPart[];
   width: number;
+  height: number;
 }
 
 /** How the selected label is set apart from the rest, in mm. */
@@ -115,12 +115,13 @@ export class Preview {
 
     // Lay the column out without the spread first, centred on the origin, so
     // it doesn't shift when another label is selected.
-    const pitch = HEIGHT + GAP;
+    const height = Math.max(0, ...labels.map((l) => l.height));
+    const pitch = height + GAP;
     const depth = labels.length * pitch - GAP;
     const width = Math.max(0, ...labels.map((l) => l.width));
     const at = labels.findIndex((l) => l.id === selected);
     labels.forEach((label, i) => {
-      const y = depth / 2 - HEIGHT / 2 - i * pitch;
+      const y = depth / 2 - height / 2 - i * pitch;
       const offset = at < 0 || i === at ? 0 : i < at ? layout.spread : -layout.spread;
       this.show(label, new THREE.Vector3(0, y + offset, i === at ? layout.lift : 0));
     });

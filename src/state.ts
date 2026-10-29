@@ -1,3 +1,4 @@
+import { isBaseKind } from "./bases";
 import { DEFAULT_OPTIONS, isText, type LabelOptions, type Segment } from "./label";
 import { migrateSymbol, symbolInfo, type LabelSymbol } from "./symbols";
 
@@ -62,6 +63,8 @@ function legacySegments({ text, symbols, symbolPosition }: LegacyFields): Segmen
 function restoreLabel(saved: Partial<LabelState> & LegacyFields): LabelState {
   const { text, symbols, symbolPosition, ...rest } = saved;
   const state: LabelState = { ...DEFAULT_STATE, id: newId(), ...rest };
+  // Labels from before there was a choice are Cullenect ones.
+  if (!isBaseKind(state.base)) state.base = DEFAULT_STATE.base;
   if (!Array.isArray(saved.segments)) state.segments = legacySegments({ text, symbols, symbolPosition });
   state.segments = state.segments.map((s) => (isText(s) ? s : migrateSymbol(s)));
   return state;
@@ -114,13 +117,13 @@ export function saveSession(session: Session) {
  * so a batch of labels comes out consistent.
  */
 export function blankLabel(template: LabelState): LabelState {
-  const { units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize } = template;
+  const { base, units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize } = template;
   const { weight, baseColor, textColor, symbolColor } = template;
   return {
     ...DEFAULT_STATE,
     id: newId(),
     segments: [{ kind: "text", text: "" }],
-    ...{ units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize },
+    ...{ base, units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize },
     ...{ weight, baseColor, textColor, symbolColor },
   };
 }
@@ -203,11 +206,12 @@ export function labelTitle(state: LabelState): string {
   return symbols.length ? `${symbols.length} symbols` : "Blank";
 }
 
-/** A file name based on the label text, e.g. "label-M3-12-1u". */
+/** A file name based on the label text and holder, e.g. "label-M3-12-1u" or "label-M3-12-1u-pred". */
 export function fileName(state: LabelState): string {
   const slug = textLine(state, " ")
     .replace(/\s+/g, "-")
     .replace(/[^\p{L}\p{N}._-]+/gu, "")
     .slice(0, 40);
-  return `label-${slug || "blank"}-${state.units}u`;
+  const base = state.base === "cullenect" ? "" : `-${state.base}`;
+  return `label-${slug || "blank"}-${state.units}u${base}`;
 }

@@ -9,8 +9,15 @@ Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
 
 ## What it does
 
-- **Cullenect labels** ([Cullen J Webb's swappable label system](https://makerworld.com/en/models/446624)),
-  1U to 3U wide (36, 78 or 120 × 11 mm), with optional snap-fit channels on 1U labels.
+- Three label holders, chosen per label, all sized to fit the pockets of
+  [Gridfinity Extended](https://github.com/ostat/gridfinity_extended_openscad) bins:
+  - **Cullenect** ([Cullen J Webb's swappable label system](https://makerworld.com/en/models/446624), v2),
+    1U to 3U wide (36, 78 or 120 × 11 mm), with optional snap-fit channels on 1U labels.
+  - **Cullenect legacy** (v1.1), 36.4 × 11 × 1 mm with three snap-fit channels, for 1U bins only.
+  - **Pred** ([pred's bins with printable labels](https://www.printables.com/model/592545)),
+    37.8, 79.8 or 121.8 × 11 × 0.8 mm with a tab and hole at each end. 11 mm tall rather than
+    gflabel's 11.5, to fit Gridfinity Extended's 11.35 mm pocket. With raised text, the face sits
+    0.4 mm below a rim, as in gflabel.
 - One or more lines of text, auto-shrunk to fit, left/center/right aligned, Open Sans regular or bold.
 - **Flush** (text inlaid level with the surface, for multi-colour printing) or **raised** text.
 - **Screw symbol** in the style of label.alch.shop: the drive seen from above (hex, Phillips,
@@ -52,8 +59,8 @@ npm run build   # static site in dist/
 Stack: TypeScript, React, Vite, [manifold-3d](https://github.com/elalish/manifold) (WASM) for solid
 geometry, [opentype.js](https://opentype.js.org) for fonts, [three.js](https://threejs.org) for
 the preview and [fflate](https://github.com/101arrowz/fflate) for zipping 3MF files. The geometry
-and export code in `src/` (`cullenect.ts`, `symbols.ts`, `text.ts`, `label.ts`, `export.ts`, `preview.ts`) has no
-React dependency; the UI lives in `App.tsx`, `components/` and the `use*.ts` hooks.
+and export code in `src/` (`bases.ts`, `cullenect.ts`, `pred.ts`, `symbols.ts`, `text.ts`,
+`label.ts`, `export.ts`, `preview.ts`) has no React dependency; the UI lives in `App.tsx`, `components/` and the `use*.ts` hooks.
 
 ### Deploying
 

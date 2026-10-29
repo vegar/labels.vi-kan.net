@@ -1,6 +1,6 @@
 import type { Font } from "opentype.js";
 import type { CrossSection, Manifold, ManifoldToplevel } from "manifold-3d";
-import { cullenectBody, HEIGHT, widthForUnits } from "./cullenect";
+import { baseInfo, type BaseKind } from "./bases";
 import { isVariableWidth, renderSymbol, type LabelSymbol } from "./symbols";
 import { textBlock, type Align } from "./text";
 
@@ -25,6 +25,7 @@ export function isText(segment: Segment): segment is TextSegment {
 }
 
 export interface LabelOptions {
+  base: BaseKind;
   units: number;
   ribs: boolean;
   segments: Segment[];
@@ -45,6 +46,7 @@ export interface LabelOptions {
 }
 
 export const DEFAULT_OPTIONS: LabelOptions = {
+  base: "cullenect",
   units: 1,
   ribs: true,
   segments: [{ kind: "text", text: "M3 × 12" }],
@@ -57,12 +59,9 @@ export const DEFAULT_OPTIONS: LabelOptions = {
   symbolSize: 7,
 };
 
-/**
- * Deepest flush text that still leaves material over the snap-fit channels,
- * whose ceiling is 0.4 mm below the face.
- */
-export function maxEmbeddedDepth(opts: Pick<LabelOptions, "units" | "ribs">): number {
-  return opts.ribs && opts.units === 1 ? 0.3 : 0.8;
+/** Deepest flush text that still leaves material over the snap-fit channels or below the face. */
+export function maxEmbeddedDepth(opts: Pick<LabelOptions, "base" | "units" | "ribs">): number {
+  return baseInfo(opts.base).maxEmbeddedDepth({ ...opts, raised: false });
 }
 
 export interface LabelParts {
@@ -93,8 +92,9 @@ type Item = { grow: boolean } & ({ text: true; shape: CrossSection } | { text: f
  * width is shared by the growing segments, or left around the row.
  */
 function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
-  const areaWidth = widthForUnits(opts.units) - 2 * opts.margin;
-  const areaHeight = HEIGHT - 2 * opts.margin;
+  const area = baseInfo(opts.base).area(opts.units);
+  const areaWidth = area.width - 2 * opts.margin;
+  const areaHeight = area.height - 2 * opts.margin;
 
   // Text at a cap height of 1 mm; empty text takes no room.
   const items: Item[] = [];
@@ -181,7 +181,7 @@ function layoutFace(wasm: ManifoldToplevel, font: Font, opts: LabelOptions) {
  * given different colours in the preview and in the exported 3MF.
  */
 export function buildLabel(wasm: ManifoldToplevel, font: Font, opts: LabelOptions): LabelParts {
-  let base = cullenectBody(wasm, { units: opts.units, ribs: opts.ribs });
+  let base = baseInfo(opts.base).body(wasm, { ...opts, raised: opts.style === "raised" });
   const face = layoutFace(wasm, font, opts);
 
   const depth = opts.style === "embedded" ? Math.min(opts.textDepth, maxEmbeddedDepth(opts)) : opts.textDepth;

@@ -4,6 +4,7 @@ import {
   blankLabel,
   cloneLabel,
   DEFAULT_STATE,
+  fileName,
   labelTitle,
   parseCloneTexts,
   parseSession,
@@ -68,6 +69,11 @@ describe("parseSession", () => {
     expect(a).not.toHaveProperty("symbolPosition");
   });
 
+  it("makes labels saved before the holder choice Cullenect ones", () => {
+    const saved = JSON.stringify({ labels: [{ id: "a" }, { id: "b", base: "pred" }, { id: "c", base: "bogus" }] });
+    expect(parseSession(saved, null).labels.map((l) => l.base)).toEqual(["cullenect", "pred", "cullenect"]);
+  });
+
   it("selects the first label when the saved selection is gone", () => {
     const s = parseSession(JSON.stringify({ labels: [{ id: "a" }], selected: "zz" }), null);
     expect(s.selected).toBe("a");
@@ -120,6 +126,16 @@ describe("label list", () => {
     expect(removeLabel(s, "b")).toMatchObject({ selected: "c" });
     expect(removeLabel({ ...s, selected: "c" }, "c")).toMatchObject({ selected: "b" });
     expect(removeLabel(s, "a").selected).toBe("b");
+  });
+
+  it("names files by text, width and holder", () => {
+    const segments = [text("M3 12")];
+    expect(fileName(label("a", { segments }))).toBe("label-M3-12-1u");
+    expect(fileName(label("a", { segments, base: "pred", units: 2 }))).toBe("label-M3-12-2u-pred");
+  });
+
+  it("gives a blank label the same holder", () => {
+    expect(blankLabel(label("a", { base: "cullenect-legacy" })).base).toBe("cullenect-legacy");
   });
 
   it("keeps the last label", () => {
