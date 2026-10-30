@@ -19,8 +19,15 @@ export interface LabelState extends LabelOptions {
   /** Stable key for the label list; not part of the geometry. */
   id: string;
   baseColor: string;
+  /** Colour of text segments that don't set their own. */
   textColor: string;
+  /** Colour of symbol segments that don't set their own. */
   symbolColor: string;
+}
+
+/** The colour a segment prints in: its own, or the label's default for its kind. */
+export function segmentColor(label: LabelState, segment: Segment): string {
+  return segment.color ?? (isText(segment) ? label.textColor : label.symbolColor);
 }
 
 /** Every label being worked on, and the one open in the editor. */

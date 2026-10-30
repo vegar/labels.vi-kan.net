@@ -9,6 +9,7 @@ import {
   parseCloneTexts,
   parseSession,
   removeLabel,
+  segmentColor,
   updateLabel,
   type LabelState,
   type Session,
@@ -182,5 +183,27 @@ describe("label list", () => {
     expect(labelTitle(label("a", { segments: [nut, text(" ")] }))).toBe("Nut");
     expect(labelTitle(label("a", { segments: [nut, symbolSegment({ kind: "washer" })] }))).toBe("2 symbols");
     expect(labelTitle(label("a", { segments: [] }))).toBe("Blank");
+  });
+});
+
+describe("segment colours", () => {
+  const l = label("a", { textColor: "#ffffff", symbolColor: "#00ff00" });
+
+  it("uses the label's default for the segment's kind", () => {
+    expect(segmentColor(l, text("M3"))).toBe("#ffffff");
+    expect(segmentColor(l, nut)).toBe("#00ff00");
+  });
+
+  it("uses the segment's own colour when it has one", () => {
+    expect(segmentColor(l, { ...text("M3"), color: "#ff0000" })).toBe("#ff0000");
+    expect(segmentColor(l, { ...nut, color: "#0000ff" })).toBe("#0000ff");
+  });
+
+  it("keeps a segment's colour when saved and restored", () => {
+    const saved = JSON.stringify(session("a"));
+    const withColour = JSON.parse(saved) as Session;
+    withColour.labels[0].segments = [{ ...text("M3"), color: "#ff0000" }, { ...nut, color: "#0000ff" }, text("12")];
+    const restored = parseSession(JSON.stringify(withColour), null).labels[0];
+    expect(restored.segments.map((s) => s.color)).toEqual(["#ff0000", "#0000ff", undefined]);
   });
 });

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import opentype from "opentype.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { ManifoldToplevel } from "manifold-3d";
+import { buildByKind } from "./parts";
 import { loadManifold } from "../src/manifold";
 import { buildLabel, DEFAULT_OPTIONS, symbolSegment, textSegment, type Segment } from "../src/label";
 import { DRIVES, migrateSymbol, renderSymbol, SYMBOLS, type LabelSymbol } from "../src/symbols";
@@ -128,7 +129,7 @@ describe("labels with symbols", () => {
 
   it("puts symbols and text side by side inside the margins, in order", () => {
     for (const segments of [[bolt, text("M3")], [text("M3"), bolt]]) {
-      const { text: t, symbols } = buildLabel(wasm, fonts, label(...segments));
+      const { text: t, symbols } = buildByKind(wasm, fonts, label(...segments));
       const tb = t!.boundingBox();
       const sb = symbols!.boundingBox();
       expectInside(tb);
@@ -140,7 +141,7 @@ describe("labels with symbols", () => {
 
   it("lays out any mix of text and symbols left to right", () => {
     const nut = symbolSegment({ kind: "nut" });
-    const { text: t, symbols } = buildLabel(wasm, fonts, { ...label(text("M3"), bolt, text("12"), nut), units: 3 });
+    const { text: t, symbols } = buildByKind(wasm, fonts, { ...label(text("M3"), bolt, text("12"), nut), units: 3 });
     expectInside(t!.boundingBox(), 60);
     expectInside(symbols!.boundingBox(), 60);
     // Text, bolt, text, nut: the text starts first, the nut ends last,
@@ -154,18 +155,18 @@ describe("labels with symbols", () => {
   it("packs the row together without growing segments, and spreads it with them", () => {
     const nut = symbolSegment({ kind: "nut" });
     const opts = { ...label(text("M3"), nut), units: 3, gap: 2 };
-    const packed = buildLabel(wasm, fonts, opts);
+    const packed = buildByKind(wasm, fonts, opts);
     const [tb, sb] = [packed.text!.boundingBox(), packed.symbols!.boundingBox()];
     expect(sb.min[0] - tb.max[0]).toBeCloseTo(2, 1);
     expect(tb.min[0] + sb.max[0]).toBeCloseTo(0, 3);
-    const left = buildLabel(wasm, fonts, { ...opts, align: "left" }).text!.boundingBox();
+    const left = buildByKind(wasm, fonts, { ...opts, align: "left" }).text!.boundingBox();
     expect(left.min[0]).toBeCloseTo(-60 + 0.8, 3);
 
     // A growing text takes the spare width: the nut goes to the right edge.
-    const grown = buildLabel(wasm, fonts, { ...opts, segments: [{ ...text("M3"), grow: true }, nut] });
+    const grown = buildByKind(wasm, fonts, { ...opts, segments: [{ ...text("M3"), grow: true }, nut] });
     expect(grown.symbols!.boundingBox().max[0]).toBeCloseTo(60 - 0.8, 3);
     // Two growing segments share it evenly.
-    const both = buildLabel(wasm, fonts, { ...opts, segments: [{ ...text("M3"), grow: true }, { ...nut, grow: true }] });
+    const both = buildByKind(wasm, fonts, { ...opts, segments: [{ ...text("M3"), grow: true }, { ...nut, grow: true }] });
     const nb = both.symbols!.boundingBox();
     expect(nb.max[0]).toBeLessThan(60 - 0.8 - 5);
     expect(nb.min[0]).toBeGreaterThan(both.text!.boundingBox().max[0] + 5);
@@ -176,7 +177,7 @@ describe("labels with symbols", () => {
     const small = { ...text("M3"), maxCapHeight: 3 };
     const big = { ...text("M3"), maxCapHeight: 6 };
     const opts = { ...label(small, { ...nut, size: 4 }, big, { ...nut, size: 8 }), units: 3 };
-    const { text: t, symbols, capHeight, shrunk } = buildLabel(wasm, fonts, opts);
+    const { text: t, symbols, capHeight, shrunk } = buildByKind(wasm, fonts, opts);
     const parts = (m: typeof t) => m!.decompose().map((p) => p.boundingBox()).sort((a, b) => a.min[0] - b.min[0]);
     const heights = parts(t).map((b) => b.max[1] - b.min[1]);
     // "M3" twice: the second pair of glyphs is twice as tall.
@@ -190,7 +191,7 @@ describe("labels with symbols", () => {
   it("keeps text sizes in proportion when it has to shrink", () => {
     const small = { ...text("A long text"), maxCapHeight: 3 };
     const big = { ...text("Another long one"), maxCapHeight: 6 };
-    const { text: t, capHeight, shrunk } = buildLabel(wasm, fonts, label(small, big));
+    const { text: t, capHeight, shrunk } = buildByKind(wasm, fonts, label(small, big));
     expectInside(t!.boundingBox());
     expect(capHeight!).toBeLessThan(3);
     expect(shrunk).toBe(true);
@@ -199,9 +200,9 @@ describe("labels with symbols", () => {
   it("places a growing symbol in its share by its own alignment", () => {
     const nut = { ...symbolSegment({ kind: "nut" }), grow: true };
     const at = (align: "left" | "center" | "right") =>
-      buildLabel(wasm, fonts, { ...label(text("M3"), { ...nut, align }), units: 3 }).symbols!.boundingBox();
+      buildByKind(wasm, fonts, { ...label(text("M3"), { ...nut, align }), units: 3 }).symbols!.boundingBox();
     expect(at("right").max[0]).toBeCloseTo(60 - 0.8, 3);
-    const tb = buildLabel(wasm, fonts, { ...label(text("M3"), nut), units: 3 }).text!.boundingBox();
+    const tb = buildByKind(wasm, fonts, { ...label(text("M3"), nut), units: 3 }).text!.boundingBox();
     expect(at("left").min[0] - tb.max[0]).toBeCloseTo(1, 1);
     const c = at("center");
     expect((c.min[0] + c.max[0]) / 2).toBeCloseTo((tb.max[0] + 1 + 60 - 0.8) / 2, 1);
@@ -209,13 +210,13 @@ describe("labels with symbols", () => {
 
   it("shrinks a row that is too long to fit", () => {
     const many = Array.from({ length: 12 }, () => bolt);
-    const { symbols } = buildLabel(wasm, fonts, label(...many, text("M3 × 12")));
+    const { symbols } = buildByKind(wasm, fonts, label(...many, text("M3 × 12")));
     expectInside(symbols!.boundingBox());
   });
 
   it("inlays symbols flush and keeps the total volume", () => {
-    const empty = buildLabel(wasm, fonts, label());
-    const { base, text: t, symbols } = buildLabel(wasm, fonts, label(bolt, text("M3")));
+    const empty = buildByKind(wasm, fonts, label());
+    const { base, text: t, symbols } = buildByKind(wasm, fonts, label(bolt, text("M3")));
     const sb = symbols!.boundingBox();
     expect(sb.max[2]).toBeCloseTo(0, 3);
     expect(sb.min[2]).toBeCloseTo(-0.2, 3);
@@ -223,7 +224,7 @@ describe("labels with symbols", () => {
   });
 
   it("centers symbols when there is no text", () => {
-    const { text: t, symbols } = buildLabel(wasm, fonts, label(bolt, text(" ")));
+    const { text: t, symbols } = buildByKind(wasm, fonts, label(bolt, text(" ")));
     expect(t).toBeUndefined();
     const sb = symbols!.boundingBox();
     expect(sb.min[0] + sb.max[0]).toBeCloseTo(0, 3);
@@ -231,7 +232,26 @@ describe("labels with symbols", () => {
 
   it("gives a bolt the room the text leaves", () => {
     const opts = { ...label(text("M4"), symbolSegment({ kind: "bolt", length: 40 })), units: 3 };
-    const sb = buildLabel(wasm, fonts, opts).symbols!.boundingBox();
+    const sb = buildByKind(wasm, fonts, opts).symbols!.boundingBox();
     expect(sb.max[0] - sb.min[0]).toBeGreaterThan(40);
+  });
+});
+
+describe("segment solids", () => {
+  it("builds one solid per printed segment, in order, skipping empty text", () => {
+    const opts = {
+      ...DEFAULT_OPTIONS,
+      units: 3,
+      segments: [textSegment("M3"), symbolSegment({ kind: "nut" }), textSegment(" "), textSegment("12")] as Segment[],
+    };
+    const { segments } = buildLabel(wasm, fonts, opts);
+    expect(segments.map((s) => [s.index, s.kind])).toEqual([
+      [0, "text"],
+      [1, "symbol"],
+      [3, "text"],
+    ]);
+    // Left to right in segment order.
+    const xs = segments.map((s) => s.manifold.boundingBox().min[0]);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
   });
 });

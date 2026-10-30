@@ -883,3 +883,13 @@ h2 small {
 .icon-check:has(input:not(:checked)) .option-icon {
   opacity: 0.6;
 }
+
+.colour-override {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.colour-override input[type="color"]:disabled {
+  opacity: 0.45;
+}

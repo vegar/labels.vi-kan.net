@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { baseInfo } from "./bases";
-import { to3mf, toStlZip, type ExportObject } from "./export";
-import { maxEmbeddedDepth } from "./label";
-import { fileName, loadSession, saveSession, updateLabel, type LabelState, type Session } from "./state";
+import type { Manifold } from "manifold-3d";
+import { to3mf, toStlZip, type ExportObject, type ExportPart } from "./export";
+import { maxEmbeddedDepth, type LabelParts } from "./label";
+import type { Engine } from "./useEngine";
+import { fileName, loadSession, segmentColor, saveSession, updateLabel, type LabelState, type Session } from "./state";
 import { useEngine } from "./useEngine";
 import { useLabels } from "./useLabels";
 import { MIN_LEGIBLE_CAP_HEIGHT } from "./components/labelOps";
@@ -32,6 +34,34 @@ function download(data: Uint8Array, filename: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * The parts to export for one label: the body, then one part per kind and
+ * colour, so segments that print alike stay together. Parts named "text" and
+ * "symbols" hold the segments in the label's default colours.
+ */
+function exportParts(engine: Engine, label: LabelState, built: LabelParts): { parts: ExportPart[]; made: Manifold[] } {
+  const groups = new Map<string, { name: string; color: string; manifolds: Manifold[] }>();
+  for (const solid of built.segments) {
+    const color = segmentColor(label, label.segments[solid.index]);
+    const kindName = solid.kind === "text" ? "text" : "symbols";
+    const isDefault = color === (solid.kind === "text" ? label.textColor : label.symbolColor);
+    const name = isDefault ? kindName : `${kindName}-${color.replace("#", "").toLowerCase()}`;
+    const group = groups.get(name) ?? { name, color, manifolds: [] };
+    group.manifolds.push(solid.manifold);
+    groups.set(name, group);
+  }
+  // Default-coloured groups first, so the usual parts keep their usual order.
+  const ordered = [...groups.values()].sort((a, b) => Number(a.name.includes("-")) - Number(b.name.includes("-")));
+  const made: Manifold[] = [];
+  const parts: ExportPart[] = [{ name: "label", manifold: built.base, color: label.baseColor }];
+  for (const g of ordered) {
+    let manifold = g.manifolds[0];
+    if (g.manifolds.length > 1) made.push((manifold = engine.wasm.Manifold.compose(g.manifolds)));
+    parts.push({ name: g.name, manifold, color: g.color });
+  }
+  return { parts, made };
+}
+
 export function App() {
   const [session, setSession] = useState<Session>(loadSession);
   useEffect(() => saveSession(session), [session]);
@@ -58,8 +88,7 @@ export function App() {
           parts: built
             ? [
                 { manifold: built.base, color: label.baseColor },
-                ...(built.text ? [{ manifold: built.text, color: label.textColor }] : []),
-                ...(built.symbols ? [{ manifold: built.symbols, color: label.symbolColor }] : []),
+                ...built.segments.map((s) => ({ manifold: s.manifold, color: segmentColor(label, label.segments[s.index]) })),
               ]
             : [],
         };
@@ -84,24 +113,26 @@ export function App() {
         ? "Loading…"
         : parts.capHeight
           ? `Smallest letters ${parts.capHeight.toFixed(1)} mm · built in ${ms} ms`
-          : parts.symbols
+          : parts.segments.length
             ? `Built in ${ms} ms`
             : "No text yet";
 
   // Every label goes into the export, so wait until all of them are built.
-  const exportObjects = (): ExportObject[] =>
-    session.labels.map((label) => {
-      const built = builds.get(label.id)!.parts!;
-      return {
-        name: fileName(label),
-        parts: [
-          { name: "label", manifold: built.base, color: label.baseColor },
-          ...(built.text ? [{ name: "text", manifold: built.text, color: label.textColor }] : []),
-          ...(built.symbols ? [{ name: "symbols", manifold: built.symbols, color: label.symbolColor }] : []),
-        ],
-      };
-    });
-  const canExport = session.labels.every((label) => builds.get(label.id)?.parts);
+  const withExportObjects = (write: (objects: ExportObject[]) => void) => {
+    const made: Manifold[] = [];
+    try {
+      write(
+        session.labels.map((label) => {
+          const built = exportParts(engine!, label, builds.get(label.id)!.parts!);
+          made.push(...built.made);
+          return { name: fileName(label), parts: built.parts };
+        }),
+      );
+    } finally {
+      made.forEach((m) => m.delete());
+    }
+  };
+  const canExport = !!engine && session.labels.every((label) => builds.get(label.id)?.parts);
   const count = session.labels.length;
   const exportName = count === 1 ? fileName(state) : `labels-${count}`;
   const labelCount = count === 1 ? "" : ` (${count} labels)`;
@@ -112,14 +143,18 @@ export function App() {
         type="button"
         className="primary"
         disabled={!canExport}
-        onClick={() => download(to3mf(exportName, exportObjects()), `${exportName}.3mf`, "model/3mf")}
+        onClick={() =>
+          withExportObjects((objects) => download(to3mf(exportName, objects), `${exportName}.3mf`, "model/3mf"))
+        }
       >
         Download 3MF{labelCount}
       </button>
       <button
         type="button"
         disabled={!canExport}
-        onClick={() => download(toStlZip(exportObjects()), `${exportName}-stl.zip`, "application/zip")}
+        onClick={() =>
+          withExportObjects((objects) => download(toStlZip(objects), `${exportName}-stl.zip`, "application/zip"))
+        }
       >
         STL (zip)
       </button>
