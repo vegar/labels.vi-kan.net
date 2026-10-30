@@ -87,7 +87,7 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "One 3MF for all labels",
-    text: "Each label is its own object, with the label, text and symbols as separate parts. Labels are laid out back to front with a 5 mm gap and a 5 mm edge, in columns that wrap to the right, centred on your printer's plate.",
+    text: "Each label is its own object, with the label, text and symbols as separate parts. Labels are laid out in rows like lines of text, from the back left, with a 5 mm gap and a 5 mm edge, centred on your printer's plate. A short label fills the gap at the end of an earlier row.",
   },
   {
     title: "More than one plate",

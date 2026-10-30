@@ -219,7 +219,7 @@ describe("export", () => {
     ]);
   });
 
-  it("lays labels out back to front without overlapping", () => {
+  it("lays labels out in rows without overlapping", () => {
     const labels = Array.from({ length: 20 }, (_, i) => {
       const { base } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, segments: [], units: (i % 3) + 1 });
       return { name: `l${i}`, parts: [{ name: "label", manifold: base, color: "#202020" }] };
@@ -231,8 +231,9 @@ describe("export", () => {
       expect(b.min[2] + z).toBeCloseTo(0, 6);
       return { minX: b.min[0] + x, maxX: b.max[0] + x, minY: b.min[1] + y, maxY: b.max[1] + y };
     });
-    // The first label is at the back (highest y) of the first column.
-    expect(boxes[1].maxY).toBeLessThan(boxes[0].minY);
+    // The first label is at the back left, and the second next to it in the same row.
+    expect(boxes[1].minX).toBeGreaterThan(boxes[0].maxX);
+    expect(boxes[1].maxY).toBeCloseTo(boxes[0].maxY, 6);
     for (let i = 0; i < boxes.length; i++) {
       for (let j = i + 1; j < boxes.length; j++) {
         const [p, q] = [boxes[i], boxes[j]];

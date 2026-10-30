@@ -173,9 +173,12 @@ function hitsZone(blocked: Area[], x: number, top: number, item: Footprint): Are
 }
 
 /**
- * Lay footprints out on as many plates as needed, in order: the first at the
- * back left, down a column towards the front, then the next column to the
- * right, then the next plate, keeping clear of the plate's keep-clear zones.
+ * Lay footprints out on as many plates as needed, like lines of text: the
+ * first at the back left, along a row to the right, then the next row towards
+ * the front, then the next plate, keeping clear of the plate's keep-clear
+ * zones. A footprint goes at the end of the first row it fits in, so short
+ * ones fill the gaps earlier rows left. Labels are all about as deep, so rows
+ * waste little space.
  * Each plate's layout is centred on the plate where that stays clear of
  * them. A footprint too large for the plate gets a plate of its own.
  */
@@ -184,56 +187,50 @@ export function packPlates(items: Footprint[], bed: Bed): Placement[] {
   // Back-left corners from the usable area's back-left corner, with y growing towards the front.
   const placed: { plate: number; x: number; y: number }[] = [];
   let plate = 0;
-  let columnX = 0;
-  let columnWidth = 0;
-  let y = 0;
-  let empty = true;
+  /** The current plate's rows, back to front, each with where its next label would go. */
+  let rows: { y: number; depth: number; x: number }[] = [];
   /** The plate holds something too large to share it with. */
   let full = false;
-  const nextColumn = () => {
-    columnX += columnWidth + PLATE_GAP;
-    columnWidth = 0;
-    y = 0;
-  };
-  const nextPlate = () => {
-    plate++;
-    columnX = 0;
-    columnWidth = 0;
-    y = 0;
-    empty = true;
+  /** Where along a row a footprint fits, clear of the zones, if it does. */
+  const fitInRow = (row: { y: number; x: number }, item: Footprint): number | undefined => {
+    let x = row.x;
+    // Each step moves right, so this ends; the bound is only a safeguard.
+    for (let tries = 0; tries < 100 && x + item.width <= area.width; tries++) {
+      const zone = hitsZone(blocked, area.x + x, area.y + area.depth - row.y, item);
+      if (!zone) return x;
+      x = Math.max(x + 1, zone.x + zone.width + PLATE_GAP - area.x);
+    }
+    return undefined;
   };
   for (const item of items) {
     const alone = tooLarge(item, bed);
-    if (!empty && (full || alone)) nextPlate();
-    // Each step moves on, so this ends; the bound is only a safeguard.
-    for (let tries = 0; !alone && tries < 1000; tries++) {
-      if (columnX + item.width > area.width) {
-        // Nowhere clear on an empty plate: leave it at the back left.
-        if (empty) {
-          columnX = 0;
-          y = 0;
-          break;
-        }
-        nextPlate();
-        continue;
-      }
-      if (y + item.depth > area.depth) {
-        nextColumn();
-        continue;
-      }
-      const zone = hitsZone(blocked, area.x + columnX, area.y + area.depth - y, item);
-      if (!zone) break;
-      // Skip past the zone: down the column if it starts in an empty column, else to the next column.
-      if (columnWidth === 0) {
-        const below = area.y + area.depth - (zone.y - PLATE_GAP);
-        if (below > y && below + item.depth <= area.depth) y = below;
-        else columnX = Math.max(columnX + 1, zone.x + zone.width + PLATE_GAP - area.x);
-      } else nextColumn();
+    if (rows.length && (full || alone)) {
+      plate++;
+      rows = [];
     }
-    placed.push({ plate, x: columnX, y });
-    columnWidth = Math.max(columnWidth, item.width);
-    y += item.depth + PLATE_GAP;
-    empty = false;
+    // First fit: the first row with room, so short labels fill the gaps at the end of earlier rows.
+    let spot: { row: (typeof rows)[number]; x: number } | undefined;
+    for (const row of rows) {
+      const x = item.depth <= row.depth ? fitInRow(row, item) : undefined;
+      if (x !== undefined) {
+        spot = { row, x };
+        break;
+      }
+    }
+    if (!spot) {
+      const last = rows.at(-1);
+      const y = last ? last.y + last.depth + PLATE_GAP : 0;
+      if (rows.length && y + item.depth > area.depth) {
+        plate++;
+        rows = [];
+      }
+      const row = { y: rows.length ? y : 0, depth: item.depth, x: 0 };
+      rows.push(row);
+      // A row clear of the zones somewhere, or failing that, the left end.
+      spot = { row, x: fitInRow(row, item) ?? 0 };
+    }
+    placed.push({ plate, x: spot.x, y: spot.row.y });
+    spot.row.x = spot.x + item.width + PLATE_GAP;
     full = alone;
   }
 

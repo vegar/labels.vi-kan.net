@@ -9,20 +9,28 @@ describe("packPlates", () => {
     expect(packPlates([item(40)], bed)).toEqual([{ plate: 0, x: 50, y: 30 }]);
   });
 
-  it("fills a column back to front, then the next column, then the next plate", () => {
-    // 50 mm usable depth: three 10 mm items with 5 mm gaps (40 mm), a fourth won't fit.
+  it("fills a row left to right, then the next row towards the front, then the next plate", () => {
+    // 90 × 50 mm usable: two 40 mm items per row, three 10 mm rows with 5 mm gaps.
     const placed = packPlates(
       Array.from({ length: 7 }, () => item(40)),
       bed,
     );
     expect(placed.map((p) => p.plate)).toEqual([0, 0, 0, 0, 0, 0, 1]);
-    expect(placed[0].y).toBeGreaterThan(placed[1].y);
-    expect(placed[3].x).toBeGreaterThan(placed[0].x);
-    expect(placed[3].y).toBe(placed[0].y);
-    // The plate's layout is centred: two 40 mm columns 5 mm apart are 85 mm wide.
+    expect(placed[1].x).toBeGreaterThan(placed[0].x);
+    expect(placed[1].y).toBe(placed[0].y);
+    expect(placed[2].y).toBeLessThan(placed[0].y);
+    expect(placed[2].x).toBe(placed[0].x);
+    // The plate's layout is centred: a row of two 40 mm items 5 mm apart is 85 mm wide.
     expect(placed[0].x).toBeCloseTo(7.5 + 20);
-    expect(placed[3].x).toBeCloseTo(7.5 + 65);
+    expect(placed[1].x).toBeCloseTo(7.5 + 65);
     expect(plateCount(placed)).toBe(2);
+  });
+
+  it("fills the gap at the end of an earlier row with a later, shorter item", () => {
+    const placed = packPlates([item(60), item(60), item(20)], bed);
+    expect(placed[1].y).toBeLessThan(placed[0].y);
+    expect(placed[2].y).toBe(placed[0].y);
+    expect(placed[2].x).toBeGreaterThan(placed[0].x);
   });
 
   it("gives an item too large for the plate a plate of its own", () => {
