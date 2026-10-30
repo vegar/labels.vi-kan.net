@@ -12,6 +12,9 @@ import { PreviewCanvas } from "./components/PreviewCanvas";
 import type { PreviewLabel, RowLayout } from "./preview";
 import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
 import { About } from "./components/About";
+import { PrinterPicker, usePrinter } from "./components/PrinterPicker";
+import { Segmented } from "./components/Segmented";
+import { bedOf, bounds, footprint, packPlates, plateCount, printerName, tooLarge } from "./bed";
 import { Sidebar } from "./sidebar/Sidebar";
 
 /** The URL hash, kept in sync so links like #about can switch pages. */
@@ -88,13 +91,30 @@ export function App() {
           parts: built
             ? [
                 { manifold: built.base, color: label.baseColor },
-                ...built.segments.map((s) => ({ manifold: s.manifold, color: segmentColor(label, label.segments[s.index]) })),
+                ...built.segments.map((s) => ({
+                  manifold: s.manifold,
+                  color: segmentColor(label, label.segments[s.index]),
+                })),
               ]
             : [],
         };
       }),
     [session.labels, builds],
   );
+
+  // The printer's bed, to lay the labels out on in the preview and the 3MF.
+  const [printer, setPrinter] = usePrinter();
+  const bed = useMemo(() => bedOf(printer), [printer.id, printer.custom.width, printer.custom.depth]);
+  const [view, setView] = useState<"row" | "bed">("row");
+  const footprints = useMemo(
+    () =>
+      previewLabels.map((l) =>
+        l.parts.length ? footprint(bounds(l.parts.map((p) => p.manifold))) : { width: l.width, depth: l.height },
+      ),
+    [previewLabels],
+  );
+  const plates = plateCount(packPlates(footprints, bed));
+  const oversized = footprints.filter((f) => tooLarge(f, bed)).length;
 
   // Flush text over the snap-fit channels can only go so deep.
   const maxDepth = state.style === "embedded" ? maxEmbeddedDepth(state) : 1;
@@ -139,12 +159,21 @@ export function App() {
 
   const exportButtons = (
     <>
+      <PrinterPicker
+        choice={printer}
+        onChange={(choice) => {
+          setPrinter(choice);
+          setView("bed");
+        }}
+        plates={plates}
+        tooLarge={oversized}
+      />
       <button
         type="button"
         className="primary"
         disabled={!canExport}
         onClick={() =>
-          withExportObjects((objects) => download(to3mf(exportName, objects), `${exportName}.3mf`, "model/3mf"))
+          withExportObjects((objects) => download(to3mf(exportName, objects, bed), `${exportName}.3mf`, "model/3mf"))
         }
       >
         Download 3MF{labelCount}
@@ -194,10 +223,19 @@ export function App() {
           labels={previewLabels}
           selected={state.id}
           layout={layout}
+          bed={view === "bed" ? bed : null}
           onSelect={(id) => setSession((s) => ({ ...s, selected: id }))}
         />
         <div className="status">
           <div className="row-controls">
+            <Segmented
+              value={view}
+              options={[
+                { value: "row", label: "Labels" },
+                { value: "bed", label: "Print bed" },
+              ]}
+              onChange={setView}
+            />
             <label>
               <span>
                 Lift selected <output>{layout.lift.toFixed(1)} mm</output>
@@ -211,21 +249,26 @@ export function App() {
                 onChange={(e) => setLayout((l) => ({ ...l, lift: Number(e.target.value) }))}
               />
             </label>
-            <label>
-              <span>
-                Spread others <output>{layout.spread.toFixed(1)} mm</output>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={40}
-                step={0.5}
-                value={layout.spread}
-                onChange={(e) => setLayout((l) => ({ ...l, spread: Number(e.target.value) }))}
-              />
-            </label>
+            {view === "row" && (
+              <label>
+                <span>
+                  Spread others <output>{layout.spread.toFixed(1)} mm</output>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={40}
+                  step={0.5}
+                  value={layout.spread}
+                  onChange={(e) => setLayout((l) => ({ ...l, spread: Number(e.target.value) }))}
+                />
+              </label>
+            )}
           </div>
-          <div>{status}</div>
+          <div>
+            {view === "bed" && `${plates === 1 ? "1 plate" : `${plates} plates`} on ${printerName(printer)} · `}
+            {status}
+          </div>
         </div>
       </section>
       {showAbout && <About />}

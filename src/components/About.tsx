@@ -87,7 +87,11 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "One 3MF for all labels",
-    text: "Each label is its own object, with the label, text and symbols as separate parts. Labels are laid out back to front with a 5 mm gap, in columns up to 200 mm, centred on the plate.",
+    text: "Each label is its own object, with the label, text and symbols as separate parts. Labels are laid out back to front with a 5 mm gap and a 5 mm edge, in columns that wrap to the right, centred on your printer's plate.",
+  },
+  {
+    title: "More than one plate",
+    text: "Labels that don't fit go where Bambu Studio and OrcaSlicer put the next plates, a fifth of a plate apart in a square-ish grid. The file carries no printer settings, so your own presets stay as they are.",
   },
   {
     title: "Colours in Bambu Studio and OrcaSlicer",

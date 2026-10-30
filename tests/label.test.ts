@@ -8,6 +8,8 @@ import { loadManifold } from "../src/manifold";
 import { DEFAULT_OPTIONS, maxEmbeddedDepth, textSegment } from "../src/label";
 import { plateLayout, to3mf, toStl, toStlZip } from "../src/export";
 
+const BED = { width: 256, depth: 256 };
+
 let wasm: ManifoldToplevel;
 const fontData = readFileSync(new URL("../public/fonts/OpenSans-Regular.ttf", import.meta.url));
 const font = opentype.parse(fontData.buffer.slice(fontData.byteOffset, fontData.byteOffset + fontData.byteLength));
@@ -148,15 +150,19 @@ describe("export", () => {
   it("writes a 3MF with one object per part plus an assembly", () => {
     const { base, text } = buildByKind(wasm, fonts, DEFAULT_OPTIONS);
     const files = unzipSync(
-      to3mf("test", [
-        {
-          name: "label",
-          parts: [
-            { name: "base", manifold: base, color: "#202020" },
-            { name: "text", manifold: text!, color: "#ffffff" },
-          ],
-        },
-      ]),
+      to3mf(
+        "test",
+        [
+          {
+            name: "label",
+            parts: [
+              { name: "base", manifold: base, color: "#202020" },
+              { name: "text", manifold: text!, color: "#ffffff" },
+            ],
+          },
+        ],
+        BED,
+      ),
     );
     const model = strFromU8(files["3D/3dmodel.model"]);
     expect(model.match(/<object /g)).toHaveLength(3);
@@ -169,27 +175,33 @@ describe("export", () => {
     const a = buildByKind(wasm, fonts, DEFAULT_OPTIONS);
     const b = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, segments: [textSegment("M4")], units: 2 });
     const files = unzipSync(
-      to3mf("test", [
-        {
-          name: "a",
-          parts: [
-            { name: "label", manifold: a.base, color: "#202020" },
-            { name: "text", manifold: a.text!, color: "#ffffff" },
-          ],
-        },
-        {
-          name: "b",
-          parts: [
-            { name: "label", manifold: b.base, color: "#202020" },
-            { name: "text", manifold: b.text!, color: "#ff0000" },
-          ],
-        },
-      ]),
+      to3mf(
+        "test",
+        [
+          {
+            name: "a",
+            parts: [
+              { name: "label", manifold: a.base, color: "#202020" },
+              { name: "text", manifold: a.text!, color: "#ffffff" },
+            ],
+          },
+          {
+            name: "b",
+            parts: [
+              { name: "label", manifold: b.base, color: "#202020" },
+              { name: "text", manifold: b.text!, color: "#ff0000" },
+            ],
+          },
+        ],
+        BED,
+      ),
     );
     const model = strFromU8(files["3D/3dmodel.model"]);
     // Parts 2, 3 and assembly 4; parts 5, 6 and assembly 7.
     expect([...model.matchAll(/<item objectid="(\d+)"/g)].map((m) => m[1])).toEqual(["4", "7"]);
-    expect(model).toContain('<object id="7" name="b" type="model"><components><component objectid="5"/><component objectid="6"/>');
+    expect(model).toContain(
+      '<object id="7" name="b" type="model"><components><component objectid="5"/><component objectid="6"/>',
+    );
     expect(model).toContain('pid="1" pindex="3"');
 
     // Filament slots are shared across labels: same colour, same slot.
@@ -212,7 +224,7 @@ describe("export", () => {
       const { base } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, segments: [], units: (i % 3) + 1 });
       return { name: `l${i}`, parts: [{ name: "label", manifold: base, color: "#202020" }] };
     });
-    const layout = plateLayout(labels);
+    const layout = plateLayout(labels, BED);
     const boxes = labels.map((l, i) => {
       const b = l.parts[0].manifold.boundingBox();
       const [x, y, z] = layout[i];
@@ -233,6 +245,24 @@ describe("export", () => {
       expect(boxes[i].minY).toBeGreaterThan(0);
       expect(boxes[i].maxY).toBeLessThan(256);
     }
+  });
+
+  it("puts labels that don't fit where Bambu Studio's second plate goes", () => {
+    const { base } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, segments: [], units: 3 });
+    const labels = Array.from({ length: 12 }, (_, i) => ({
+      name: `l${i}`,
+      parts: [{ name: "label", manifold: base, color: "#202020" }],
+    }));
+    // A 120 mm label: one column of 5 on a 100 mm deep, 130 mm wide plate.
+    const bed = { width: 130, depth: 100 };
+    const layout = plateLayout(labels, bed);
+    const b = base.boundingBox();
+    const xs = layout.map(([x]) => b.min[0] + x);
+    expect(xs.slice(0, 5).every((x) => x > 0 && x + 120 < 130)).toBe(true);
+    // Three plates sit in a 2-wide grid, the second 1.2 plate widths to the right.
+    expect(xs.slice(5, 10).every((x) => x > 156 && x + 120 < 156 + 130)).toBe(true);
+    const ys = layout.map(([, y]) => b.min[1] + y);
+    expect(ys.slice(10).every((y) => y > -120 && y < -20)).toBe(true);
   });
 
   it("zips STLs in a folder per label, numbering repeated names", () => {

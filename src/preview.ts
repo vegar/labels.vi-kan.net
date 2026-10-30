@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Manifold } from "manifold-3d";
+import { bounds, packPlates, plateColumns, plateCount, plateOrigin, type Bed } from "./bed";
 
 export interface PreviewPart {
   manifold: Manifold;
@@ -25,6 +26,12 @@ export interface RowLayout {
 
 /** Space between neighbouring labels, in mm. */
 const GAP = 4;
+
+/** A textured-PEI grey that dark and light labels both stand out on. */
+const PLATE_COLOR = 0x8c9299;
+const PLATE_LINE_COLOR = 0x70767d;
+/** Grid lines on the plate, in mm. */
+const PLATE_GRID = 10;
 
 /** How far the pointer may move, in px, before a press counts as an orbit drag rather than a click. */
 const CLICK_SLOP = 5;
@@ -64,6 +71,8 @@ export class Preview {
   private resizeObserver: ResizeObserver;
   private raycaster = new THREE.Raycaster();
   private pressed: { x: number; y: number } | null = null;
+  private plates = new THREE.Group();
+  private platesKey = "";
 
   /** Called with a label's id when it is clicked in the view. */
   onPick: ((id: string) => void) | null = null;
@@ -82,6 +91,7 @@ export class Preview {
     const key = new THREE.DirectionalLight(0xffffff, 1.8);
     key.position.set(-40, -60, 100);
     this.scene.add(key);
+    this.scene.add(this.plates);
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener("pointerdown", this.onPointerDown);
@@ -103,16 +113,23 @@ export class Preview {
   }
 
   /**
-   * Show the labels in a column from back to front, the first label furthest
-   * away, like cards in a file box. The selected label is lifted and its
-   * neighbours pushed aside according to `layout`; labels glide to their
-   * new places when the selection or layout changes.
+   * Show the labels, either in a column from back to front, the first label
+   * furthest away, like cards in a file box; or, given a `bed`, laid out on
+   * the printer's plates as they will be exported. In the column the selected
+   * label is lifted and its neighbours pushed aside according to `layout`; on
+   * the bed it is only lifted. Labels glide to their new places when anything
+   * changes.
    */
-  update(labels: PreviewLabel[], selected: string, layout: RowLayout) {
+  update(labels: PreviewLabel[], selected: string, layout: RowLayout, bed: Bed | null) {
     for (const [id, shown] of this.shown) {
       if (!labels.some((l) => l.id === id)) this.remove(id, shown);
     }
+    if (bed) this.showBed(labels, selected, layout, bed);
+    else this.showRow(labels, selected, layout);
+  }
 
+  private showRow(labels: PreviewLabel[], selected: string, layout: RowLayout) {
+    this.showPlates(null, 0);
     // Lay the column out without the spread first, centred on the origin, so
     // it doesn't shift when another label is selected.
     const height = Math.max(0, ...labels.map((l) => l.height));
@@ -125,12 +142,71 @@ export class Preview {
       const offset = at < 0 || i === at ? 0 : i < at ? layout.spread : -layout.spread;
       this.show(label, new THREE.Vector3(0, y + offset, i === at ? layout.lift : 0));
     });
+    this.reframe(`row:${labels.length}:${width}`, width, depth + 2 * layout.spread);
+  }
 
-    const frame = `${labels.length}:${width}`;
-    if (frame !== this.framed) {
-      this.framed = frame;
-      this.frame(width, depth + 2 * layout.spread);
+  /** Lay the labels out on as many plates as they need, with the plates centred on the origin. */
+  private showBed(labels: PreviewLabel[], selected: string, layout: RowLayout, bed: Bed) {
+    // A label still building takes its nominal size, centred, until its geometry is there.
+    const boxes = labels.map((l) =>
+      l.parts.length
+        ? bounds(l.parts.map((p) => p.manifold))
+        : { min: [-l.width / 2, -l.height / 2, 0], max: [l.width / 2, l.height / 2, 0] },
+    );
+    const placements = packPlates(
+      boxes.map((b) => ({ width: b.max[0] - b.min[0], depth: b.max[1] - b.min[1] })),
+      bed,
+    );
+    const count = plateCount(placements);
+    const { center, width, depth } = plateGridExtent(count, bed);
+    labels.forEach((label, i) => {
+      const b = boxes[i];
+      const p = placements[i];
+      const [ox, oy] = plateOrigin(p.plate, count, bed);
+      const target = new THREE.Vector3(
+        ox + p.x - (b.min[0] + b.max[0]) / 2 - center[0],
+        oy + p.y - (b.min[1] + b.max[1]) / 2 - center[1],
+        (label.id === selected ? layout.lift : 0) - b.min[2],
+      );
+      this.show(label, target);
+    });
+    this.showPlates(bed, count);
+    this.reframe(`bed:${bed.width}:${bed.depth}:${count}`, width, depth);
+  }
+
+  /** Draw `count` plates of size `bed`, or none. */
+  private showPlates(bed: Bed | null, count: number) {
+    const key = bed ? `${bed.width}:${bed.depth}:${count}` : "";
+    if (key === this.platesKey) return;
+    this.platesKey = key;
+    clearGroup(this.plates);
+    if (!bed) return;
+    const { center } = plateGridExtent(count, bed);
+    for (let i = 0; i < count; i++) {
+      const [ox, oy] = plateOrigin(i, count, bed);
+      const plate = new THREE.Group();
+      plate.position.set(ox - center[0], oy - center[1], 0);
+      const surface = new THREE.Mesh(
+        new THREE.PlaneGeometry(bed.width, bed.depth),
+        new THREE.MeshStandardMaterial({ color: PLATE_COLOR, roughness: 0.9, metalness: 0 }),
+      );
+      surface.position.set(bed.width / 2, bed.depth / 2, -0.05);
+      plate.add(surface);
+      const lines: number[] = [];
+      for (let x = PLATE_GRID; x < bed.width; x += PLATE_GRID) lines.push(x, 0, 0, x, bed.depth, 0);
+      for (let y = PLATE_GRID; y < bed.depth; y += PLATE_GRID) lines.push(0, y, 0, bed.width, y, 0);
+      const grid = new THREE.BufferGeometry();
+      grid.setAttribute("position", new THREE.Float32BufferAttribute(lines, 3));
+      plate.add(new THREE.LineSegments(grid, new THREE.LineBasicMaterial({ color: PLATE_LINE_COLOR })));
+      this.plates.add(plate);
     }
+  }
+
+  /** Point the camera at a new area when what is shown changed shape, but not on every edit. */
+  private reframe(key: string, width: number, depth: number) {
+    if (key === this.framed) return;
+    this.framed = key;
+    this.frame(width, depth);
   }
 
   dispose() {
@@ -142,6 +218,7 @@ export class Preview {
     this.resizeObserver.disconnect();
     this.controls.dispose();
     for (const [id, shown] of this.shown) this.remove(id, shown);
+    clearGroup(this.plates);
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -244,11 +321,26 @@ export class Preview {
   }
 }
 
+/** The size of the grid of plates, and its middle, in the coordinates plateOrigin uses. */
+function plateGridExtent(count: number, bed: Bed) {
+  const cols = plateColumns(count);
+  const rows = Math.ceil(count / cols);
+  const [right] = plateOrigin(cols - 1, count, bed);
+  const [, front] = plateOrigin((rows - 1) * cols, count, bed);
+  const width = right + bed.width;
+  const depth = bed.depth - front;
+  return { width, depth, center: [width / 2, front + depth / 2] as [number, number] };
+}
+
+/** Remove and free everything in a group, nested groups included. */
 function clearGroup(group: THREE.Group) {
   for (const child of [...group.children]) {
-    const mesh = child as THREE.Mesh;
-    mesh.geometry.dispose();
-    (mesh.material as THREE.Material).dispose();
-    group.remove(mesh);
+    if (child instanceof THREE.Group) clearGroup(child);
+    else {
+      const mesh = child as THREE.Mesh;
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    group.remove(child);
   }
 }

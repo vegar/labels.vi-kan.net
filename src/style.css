@@ -197,6 +197,40 @@ input[type="color"] {
 
 .export {
   flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.printer {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.printer label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.printer select {
+  flex: 1;
+  min-width: 0;
+}
+
+.custom-bed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.printer small {
+  color: var(--muted);
+}
+
+.printer small.warn {
+  color: var(--warn);
 }
 
 .export button {
@@ -246,6 +280,7 @@ footer a {
 
 .row-controls {
   display: flex;
+  align-items: flex-end;
   gap: 16px;
   margin-bottom: 8px;
 }

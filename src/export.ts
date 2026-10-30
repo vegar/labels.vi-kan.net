@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import type { Manifold } from "manifold-3d";
+import { bounds, footprint, packPlates, plateCount, plateOrigin, type Bed } from "./bed";
 
 export interface ExportPart {
   name: string;
@@ -33,13 +34,6 @@ export interface ExportObject {
   parts: ExportPart[];
 }
 
-/** Gap between labels on the plate, in mm. */
-const PLATE_GAP = 5;
-/** Labels go in columns no taller than this, in mm. */
-const PLATE_COLUMN_HEIGHT = 200;
-/** Where the middle of the layout goes; inside every Bambu Lab plate. */
-const PLATE_CENTER: [number, number] = [128, 128];
-
 /**
  * Filament slot (1-based) for each part: the first part gets slot 1 and every
  * further distinct colour gets the next slot, so same-coloured parts share one,
@@ -56,57 +50,20 @@ function filamentSlots(objects: ExportObject[]): number[][] {
   );
 }
 
-interface Bounds {
-  min: [number, number, number];
-  max: [number, number, number];
-}
-
-function bounds(parts: ExportPart[]): Bounds {
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
-  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-  for (const p of parts) {
-    const b = p.manifold.boundingBox();
-    for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k], b.min[k]);
-      max[k] = Math.max(max[k], b.max[k]);
-    }
-  }
-  return { min, max };
-}
-
 /**
- * Where each object goes on the plate, as a translation. Objects are listed top
- * to bottom (first object at the back) and wrap into a new column to the right
- * when a column gets too tall. The whole layout is centred on the plate.
+ * Where each object goes, as a translation: packed onto as many plates as
+ * the bed needs (see packPlates), and the plates spread out the way Bambu
+ * Studio and OrcaSlicer place them. Those slicers only load plates from
+ * their own project files, so the labels past the first plate land beside it.
  */
-export function plateLayout(objects: ExportObject[]): [number, number, number][] {
-  const boxes = objects.map((o) => bounds(o.parts));
-  const placed: { x: number; y: number }[] = [];
-  let columnX = 0;
-  let columnWidth = 0;
-  let y = 0;
-  for (const b of boxes) {
-    const w = b.max[0] - b.min[0];
-    const h = b.max[1] - b.min[1];
-    if (y > 0 && y + h > PLATE_COLUMN_HEIGHT) {
-      columnX += columnWidth + PLATE_GAP;
-      columnWidth = 0;
-      y = 0;
-    }
-    // Top-left corner of this object, with y growing towards the front.
-    placed.push({ x: columnX, y });
-    columnWidth = Math.max(columnWidth, w);
-    y += h + PLATE_GAP;
-  }
-  const width = Math.max(0, ...placed.map((p, i) => p.x + boxes[i].max[0] - boxes[i].min[0]));
-  const depth = Math.max(0, ...placed.map((p, i) => p.y + boxes[i].max[1] - boxes[i].min[1]));
-  return placed.map((p, i) => {
+export function plateLayout(objects: ExportObject[], bed: Bed): [number, number, number][] {
+  const boxes = objects.map((o) => bounds(o.parts.map((p) => p.manifold)));
+  const placements = packPlates(boxes.map(footprint), bed);
+  const count = plateCount(placements);
+  return placements.map((p, i) => {
     const b = boxes[i];
-    return [
-      PLATE_CENTER[0] - width / 2 + p.x - b.min[0],
-      PLATE_CENTER[1] + depth / 2 - p.y - b.max[1],
-      -b.min[2],
-    ];
+    const [ox, oy] = plateOrigin(p.plate, count, bed);
+    return [ox + p.x - (b.min[0] + b.max[0]) / 2, oy + p.y - (b.min[1] + b.max[1]) / 2, -b.min[2]];
   });
 }
 
@@ -147,7 +104,7 @@ ${body}
  * open it with one part per colour; Bambu Studio and OrcaSlicer also get each
  * colour on its own filament slot, shared across all labels.
  */
-export function to3mf(title: string, objects: ExportObject[]): Uint8Array {
+export function to3mf(title: string, objects: ExportObject[], bed: Bed): Uint8Array {
   const allParts = objects.flatMap((o) => o.parts);
   const materials = allParts
     .map((p) => `<base name="${escapeXml(p.name)}" displaycolor="${p.color.toUpperCase()}FF"/>`)
@@ -168,11 +125,13 @@ export function to3mf(title: string, objects: ExportObject[]): Uint8Array {
     });
     const assembly = nextId++;
     const components = partIds.map((id) => `<component objectid="${id}"/>`).join("");
-    resources.push(`<object id="${assembly}" name="${escapeXml(o.name)}" type="model"><components>${components}</components></object>`);
+    resources.push(
+      `<object id="${assembly}" name="${escapeXml(o.name)}" type="model"><components>${components}</components></object>`,
+    );
     ids.push({ assembly, parts: partIds });
   }
 
-  const layout = plateLayout(objects);
+  const layout = plateLayout(objects, bed);
   const items = ids
     .map(({ assembly }, i) => {
       const [x, y, z] = layout[i].map((c) => c.toFixed(4));
