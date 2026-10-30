@@ -25,16 +25,9 @@ import {
   type ScrewView,
 } from "../symbols";
 import { Segmented } from "./Segmented";
+import { HEAD_LABELS } from "./segmentOps";
 
-const HEAD_LABELS = {
-  pan: "Pan",
-  socket: "Socket",
-  countersunk: "Countersunk",
-  round: "Round",
-  wafer: "Wafer",
-};
-
-const MODIFIER_LABELS = {
+export const MODIFIER_LABELS = {
   tapping: "Self-tapping",
   partial: "Partly threaded",
   slotted: "Slotted",
@@ -42,7 +35,7 @@ const MODIFIER_LABELS = {
   flip: "Flip",
 };
 
-const NUT_TYPES: { value: NutType; label: string }[] = [
+export const NUT_TYPES: { value: NutType; label: string }[] = [
   { value: "regular", label: "Hex nut" },
   { value: "lock", label: "Lock nut" },
   { value: "square", label: "Square nut" },
@@ -50,14 +43,17 @@ const NUT_TYPES: { value: NutType; label: string }[] = [
 ];
 
 /** A small drawing of a symbol, rendered with the same geometry as the label. */
-function SymbolIcon({ wasm, symbol }: { wasm: ManifoldToplevel; symbol: LabelSymbol }) {
+export function SymbolIcon({ wasm, symbol }: { wasm: ManifoldToplevel; symbol: LabelSymbol }) {
   const icon = useMemo(() => {
     const shape = renderSymbol(wasm, symbol, 10, 24);
     const { min, max } = shape.bounds();
     const path = toSvgPath(shape);
     shape.delete();
     const pad = 1;
-    return { path, viewBox: `${min[0] - pad} ${-max[1] - pad} ${max[0] - min[0] + 2 * pad} ${max[1] - min[1] + 2 * pad}` };
+    return {
+      path,
+      viewBox: `${min[0] - pad} ${-max[1] - pad} ${max[0] - min[0] + 2 * pad} ${max[1] - min[1] + 2 * pad}`,
+    };
   }, [wasm, symbol]);
   return (
     <svg className="symbol-icon" viewBox={icon.viewBox} aria-hidden="true">
@@ -67,7 +63,7 @@ function SymbolIcon({ wasm, symbol }: { wasm: ManifoldToplevel; symbol: LabelSym
 }
 
 /** The options of one symbol: style, drive, head and so on. */
-function SymbolOptions({
+export function SymbolOptions({
   wasm,
   sym,
   onChange,
@@ -260,7 +256,7 @@ function SymbolOptions({
 }
 
 /** A small "T" for text segments, sized like the symbol icons. */
-function TextIcon() {
+export function TextIcon() {
   return (
     <svg className="symbol-icon" viewBox="0 0 24 12" aria-hidden="true">
       <text x="12" y="10.5" textAnchor="middle" fontSize="12" fontWeight="700">
@@ -270,14 +266,20 @@ function TextIcon() {
   );
 }
 
-const ALIGN_OPTIONS: { value: Align; label: string }[] = [
+export const ALIGN_OPTIONS: { value: Align; label: string }[] = [
   { value: "left", label: "Left" },
   { value: "center", label: "Center" },
   { value: "right", label: "Right" },
 ];
 
 /** A labelled slider showing its value in mm. */
-function MmSlider(props: { label: string; min: number; max: number; value: number; onChange: (v: number) => void }) {
+export function MmSlider(props: {
+  label: string;
+  min: number;
+  max: number;
+  value: number;
+  onChange: (v: number) => void;
+}) {
   return (
     <label className="field">
       <span>
@@ -296,7 +298,7 @@ function MmSlider(props: { label: string; min: number; max: number; value: numbe
 }
 
 /** Text, weight, alignment and letter height of a text segment. */
-function TextOptions({ seg, onChange }: { seg: TextSegment; onChange: (patch: Partial<TextSegment>) => void }) {
+export function TextOptions({ seg, onChange }: { seg: TextSegment; onChange: (patch: Partial<TextSegment>) => void }) {
   return (
     <>
       <label className="field">
@@ -333,6 +335,30 @@ function TextOptions({ seg, onChange }: { seg: TextSegment; onChange: (patch: Pa
   );
 }
 
+/** A symbol's options, plus where it sits when it grows and its height. */
+export function SymbolSegmentFields({
+  wasm,
+  seg,
+  onChange,
+}: {
+  wasm?: ManifoldToplevel;
+  seg: SymbolSegment;
+  onChange: (patch: Partial<SymbolSegment>) => void;
+}) {
+  return (
+    <>
+      <SymbolOptions wasm={wasm} sym={seg} onChange={onChange} />
+      {seg.grow && (
+        <div className="field">
+          <span>Align</span>
+          <Segmented value={seg.align} options={ALIGN_OPTIONS} onChange={(align) => onChange({ align })} />
+        </div>
+      )}
+      <MmSlider label="Height" min={3} max={9.4} value={seg.size} onChange={(size) => onChange({ size })} />
+    </>
+  );
+}
+
 interface Props {
   wasm?: ManifoldToplevel;
   segments: Segment[];
@@ -362,8 +388,8 @@ export function SegmentEditor({ wasm, segments, gap, align, onChange, children }
     <section>
       <h2>Content</h2>
       <p className="hint">
-        Text and symbols, left to right on the label. Segments marked Grow share the spare width; without any, the
-        row is packed together.
+        Text and symbols, left to right on the label. Segments marked Grow share the spare width; without any, the row
+        is packed together.
       </p>
       <div className="symbol-palette">
         <button type="button" title="Add text" onClick={() => setSegments([...segments, textSegment("", lastText)])}>
@@ -419,26 +445,7 @@ export function SegmentEditor({ wasm, segments, gap, align, onChange, children }
               {isText(seg) ? (
                 <TextOptions seg={seg} onChange={(p) => replace(i, { ...seg, ...p })} />
               ) : (
-                <>
-                  <SymbolOptions wasm={wasm} sym={seg} onChange={(p) => replace(i, { ...seg, ...p })} />
-                  {seg.grow && (
-                    <div className="field">
-                      <span>Align</span>
-                      <Segmented
-                        value={seg.align}
-                        options={ALIGN_OPTIONS}
-                        onChange={(align) => replace(i, { ...seg, align })}
-                      />
-                    </div>
-                  )}
-                  <MmSlider
-                    label="Height"
-                    min={3}
-                    max={9.4}
-                    value={seg.size}
-                    onChange={(size) => replace(i, { ...seg, size })}
-                  />
-                </>
+                <SymbolSegmentFields wasm={wasm} seg={seg} onChange={(p) => replace(i, { ...seg, ...p })} />
               )}
             </li>
           ))}

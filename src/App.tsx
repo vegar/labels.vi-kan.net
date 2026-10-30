@@ -1,31 +1,21 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { BASE_KINDS, baseInfo, type BaseKind } from "./bases";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { baseInfo } from "./bases";
 import { to3mf, toStlZip, type ExportObject } from "./export";
 import { maxEmbeddedDepth } from "./label";
-import {
-  addLabel,
-  blankLabel,
-  cloneLabel,
-  fileName,
-  loadSession,
-  removeLabel,
-  saveSession,
-  updateLabel,
-  type LabelState,
-  type Session,
-} from "./state";
+import { fileName, loadSession, saveSession, updateLabel, type LabelState, type Session } from "./state";
 import { useEngine } from "./useEngine";
 import { useLabels } from "./useLabels";
-import { LabelList } from "./components/LabelList";
+import { MIN_LEGIBLE_CAP_HEIGHT } from "./components/LabelFields";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 import type { PreviewLabel, RowLayout } from "./preview";
-import { Segmented } from "./components/Segmented";
 import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
-import { SegmentEditor } from "./components/SegmentEditor";
 import { About } from "./components/About";
-
-/** Below this letter height, text gets hard to read with a 0.4 mm nozzle. */
-const MIN_LEGIBLE_CAP_HEIGHT = 4.4;
+import { AccordionSidebar } from "./sidebar/AccordionSidebar";
+import { ClassicSidebar } from "./sidebar/ClassicSidebar";
+import { GridSidebar } from "./sidebar/GridSidebar";
+import { TreeSidebar } from "./sidebar/TreeSidebar";
+import type { SidebarProps } from "./sidebar/types";
+import { UI_VARIANTS, useUiVariant, type UiVariant } from "./sidebar/useUiVariant";
 
 /** The URL hash, kept in sync so links like #about can switch pages. */
 function useHash() {
@@ -37,6 +27,13 @@ function useHash() {
   }, []);
   return hash;
 }
+
+const SIDEBARS: Record<UiVariant, (props: SidebarProps) => ReactNode> = {
+  classic: ClassicSidebar,
+  tree: TreeSidebar,
+  grid: GridSidebar,
+  accordion: AccordionSidebar,
+};
 
 function download(data: Uint8Array, filename: string, type: string) {
   const url = URL.createObjectURL(new Blob([data as BlobPart], { type }));
@@ -82,9 +79,6 @@ export function App() {
     [session.labels, builds],
   );
 
-  const base = baseInfo(state.base);
-  const size = base.size(state.units);
-
   // Flush text over the snap-fit channels can only go so deep.
   const maxDepth = state.style === "embedded" ? maxEmbeddedDepth(state) : 1;
   const textDepth = Math.min(state.textDepth, maxDepth);
@@ -124,143 +118,59 @@ export function App() {
   const exportName = count === 1 ? fileName(state) : `labels-${count}`;
   const labelCount = count === 1 ? "" : ` (${count} labels)`;
 
+  const exportButtons = (
+    <>
+      <button
+        type="button"
+        className="primary"
+        disabled={!canExport}
+        onClick={() => download(to3mf(exportName, exportObjects()), `${exportName}.3mf`, "model/3mf")}
+      >
+        Download 3MF{labelCount}
+      </button>
+      <button
+        type="button"
+        disabled={!canExport}
+        onClick={() => download(toStlZip(exportObjects()), `${exportName}-stl.zip`, "application/zip")}
+      >
+        STL (zip)
+      </button>
+    </>
+  );
+
+  const [variant, setVariant] = useUiVariant();
+  const Sidebar = SIDEBARS[variant];
+
   return (
     <main className="app" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
-      <aside className="panel">
+      <aside className={`panel ui-${variant}`}>
         <header>
           <h1>Gridfinity Labels</h1>
           <p className="sub">Cullenect and pred labels, ready for multi-colour printing.</p>
+          <label className="ui-switch">
+            <span>Prototype layout</span>
+            <select value={variant} onChange={(e) => setVariant(e.target.value as UiVariant)}>
+              {UI_VARIANTS.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </header>
 
-        <LabelList
-          labels={session.labels}
-          selected={state.id}
-          onSelect={(id) => setSession((s) => ({ ...s, selected: id }))}
-          onAdd={() => setSession((s) => addLabel(s, blankLabel(state)))}
-          onClone={(id, texts) => setSession((s) => cloneLabel(s, id, texts))}
-          onRemove={(id) => setSession((s) => removeLabel(s, id))}
+        <Sidebar
+          session={session}
+          setSession={setSession}
+          state={state}
+          update={update}
+          engine={engine}
+          builds={builds}
+          textDepth={textDepth}
+          maxDepth={maxDepth}
+          shrunk={shrunk}
+          exportButtons={exportButtons}
         />
-
-        <section>
-          <h2>Label</h2>
-          <div className="field">
-            <span>Label holder</span>
-            <Segmented<BaseKind>
-              value={state.base}
-              options={BASE_KINDS.map((kind) => ({ value: kind, label: baseInfo(kind).name }))}
-              // The legacy label only comes in one size, for 1U bins.
-              onChange={(kind) => update(baseInfo(kind).oneSize ? { base: kind, units: 1 } : { base: kind })}
-            />
-          </div>
-          {!base.oneSize && (
-            <div className="field">
-              <span>Bin width</span>
-              <Segmented
-                value={state.units}
-                options={[1, 2, 3].map((u) => ({ value: u, label: `${u}U` }))}
-                onChange={(units) => update({ units })}
-              />
-            </div>
-          )}
-          <p className="hint">
-            {+size.width.toFixed(1)} × {size.height} mm{base.oneSize && ", for 1U bins"}
-          </p>
-          {state.base === "cullenect" && (
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={state.ribs}
-                disabled={state.units !== 1}
-                onChange={(e) => update({ ribs: e.target.checked })}
-              />
-              <span>
-                Snap-fit channels on the back <small>(1U only)</small>
-              </span>
-            </label>
-          )}
-        </section>
-
-        <SegmentEditor
-          wasm={engine?.wasm}
-          segments={state.segments}
-          gap={state.gap}
-          align={state.align}
-          onChange={update}
-        >
-          {shrunk && (
-            <p className="hint warn">
-              Text was shrunk below {MIN_LEGIBLE_CAP_HEIGHT} mm to fit. That may be hard to read with a 0.4 mm
-              nozzle; try fewer characters or a wider label.
-            </p>
-          )}
-        </SegmentEditor>
-
-        <section>
-          <h2>Print style</h2>
-          <Segmented
-            value={state.style}
-            options={[
-              { value: "embedded", label: "Flush" },
-              { value: "raised", label: "Raised" },
-            ]}
-            onChange={(style) => update({ style })}
-          />
-          <p className="hint">
-            {state.style === "embedded"
-              ? "Text is flush with the surface. Print face up and assign filaments to the text and symbol parts."
-              : "Text stands proud of the surface. Works with a filament swap at the text layer, or as a second part."}
-            {state.style === "raised" && state.base === "pred" && " The face of a pred label sits 0.4 mm below a rim."}
-          </p>
-          <label className="field">
-            <span>
-              Text depth <output>{textDepth.toFixed(1)} mm</output>
-            </span>
-            <input
-              type="range"
-              min={0.1}
-              max={maxDepth}
-              step={0.1}
-              value={textDepth}
-              onChange={(e) => update({ textDepth: Number(e.target.value) })}
-            />
-          </label>
-          <div className="row colors">
-            <label className="color">
-              <input type="color" value={state.baseColor} onChange={(e) => update({ baseColor: e.target.value })} />
-              <span>Label</span>
-            </label>
-            <label className="color">
-              <input type="color" value={state.textColor} onChange={(e) => update({ textColor: e.target.value })} />
-              <span>Text</span>
-            </label>
-            <label className="color">
-              <input
-                type="color"
-                value={state.symbolColor}
-                onChange={(e) => update({ symbolColor: e.target.value })}
-              />
-              <span>Symbols</span>
-            </label>
-          </div>
-        </section>
-
-        <section className="export">
-          <button
-            type="button"
-            className="primary"
-            disabled={!canExport}
-            onClick={() => download(to3mf(exportName, exportObjects()), `${exportName}.3mf`, "model/3mf")}
-          >
-            Download 3MF{labelCount}
-          </button>
-          <button
-            type="button"
-            disabled={!canExport}
-            onClick={() => download(toStlZip(exportObjects()), `${exportName}-stl.zip`, "application/zip")}
-          >
-            STL (zip)
-          </button>
-        </section>
 
         <footer>
           Label geometry from <a href="https://github.com/ndevenish/gflabel">gflabel</a> (BSD-3). Cullenect system by{" "}
