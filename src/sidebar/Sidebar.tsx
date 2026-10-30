@@ -2,10 +2,13 @@ import { useState } from "react";
 import type { ManifoldToplevel } from "manifold-3d";
 import { BASE_KINDS, baseInfo, type BaseKind } from "../bases";
 import { CloneDialog } from "../components/CloneDialog";
-import { holderPatch, MIN_LEGIBLE_CAP_HEIGHT } from "../components/LabelFields";
-import { ALIGN_OPTIONS, MODIFIER_LABELS, NUT_TYPES, SymbolIcon, TextIcon } from "../components/SegmentEditor";
+import { holderPatch, MIN_LEGIBLE_CAP_HEIGHT } from "../components/labelOps";
+import { SymbolIcon, TextIcon } from "../components/Icons";
 import {
+  ALIGN_OPTIONS,
   HEAD_LABELS,
+  MODIFIER_LABELS,
+  NUT_TYPES,
   moveSegment,
   newSegment,
   removeSegment,
@@ -47,7 +50,7 @@ import { useSegmentSelection } from "./useSegmentSelection";
  * A compact outline of labels and segments, one line each, above a classic
  * property grid: names on the left, dropdowns and number boxes on the right.
  */
-export function GridSidebar(props: SidebarProps) {
+export function Sidebar(props: SidebarProps) {
   const { session, setSession, state, update, engine } = props;
   const [segment, selectSegment] = useSegmentSelection(state);
   const [cloning, setCloning] = useState<LabelState>();
@@ -334,7 +337,7 @@ function SegmentGrid({ state, update, engine, index }: SidebarProps & { index: n
 }
 
 /**
- * The symbol's options as dropdowns and checkboxes, mirroring SymbolOptions.
+ * The symbol's options as dropdowns and checkboxes.
  * Every choice shows a drawing of the symbol with that choice applied.
  */
 function SymbolRows({

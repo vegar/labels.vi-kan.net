@@ -1,5 +1,6 @@
 import { isText, symbolSegment, textSegment, type Segment, type SymbolSegment } from "../label";
-import { DRIVES, SYMBOLS, symbolInfo, type SymbolKind } from "../symbols";
+import { DRIVES, SYMBOLS, symbolInfo, type NutType, type SymbolKind } from "../symbols";
+import type { Align } from "../text";
 
 export function replaceSegment(segments: Segment[], i: number, seg: Segment): Segment[] {
   return segments.map((s, j) => (j === i ? seg : s));
@@ -55,3 +56,24 @@ export function segmentSummary(seg: Segment): string {
   }
   return parts.join(" · ");
 }
+
+export const MODIFIER_LABELS = {
+  tapping: "Self-tapping",
+  partial: "Partly threaded",
+  slotted: "Slotted",
+  flanged: "Flanged",
+  flip: "Flip",
+};
+
+export const NUT_TYPES: { value: NutType; label: string }[] = [
+  { value: "regular", label: "Hex nut" },
+  { value: "lock", label: "Lock nut" },
+  { value: "square", label: "Square nut" },
+  { value: "tnut", label: "T-nut" },
+];
+
+export const ALIGN_OPTIONS: { value: Align; label: string }[] = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];

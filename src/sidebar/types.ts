@@ -1,10 +1,10 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import type { Update } from "../components/LabelFields";
+import type { Update } from "../components/labelOps";
 import type { LabelState, Session } from "../state";
 import type { Engine } from "../useEngine";
 import type { BuildResult } from "../useLabels";
 
-/** Everything a sidebar layout needs; all layouts edit the same session. */
+/** Everything the sidebar needs to show and edit the session. */
 export interface SidebarProps {
   session: Session;
   setSession: Dispatch<SetStateAction<Session>>;

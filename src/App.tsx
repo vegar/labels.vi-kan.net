@@ -1,21 +1,16 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { baseInfo } from "./bases";
 import { to3mf, toStlZip, type ExportObject } from "./export";
 import { maxEmbeddedDepth } from "./label";
 import { fileName, loadSession, saveSession, updateLabel, type LabelState, type Session } from "./state";
 import { useEngine } from "./useEngine";
 import { useLabels } from "./useLabels";
-import { MIN_LEGIBLE_CAP_HEIGHT } from "./components/LabelFields";
+import { MIN_LEGIBLE_CAP_HEIGHT } from "./components/labelOps";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 import type { PreviewLabel, RowLayout } from "./preview";
 import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
 import { About } from "./components/About";
-import { AccordionSidebar } from "./sidebar/AccordionSidebar";
-import { ClassicSidebar } from "./sidebar/ClassicSidebar";
-import { GridSidebar } from "./sidebar/GridSidebar";
-import { TreeSidebar } from "./sidebar/TreeSidebar";
-import type { SidebarProps } from "./sidebar/types";
-import { UI_VARIANTS, useUiVariant, type UiVariant } from "./sidebar/useUiVariant";
+import { Sidebar } from "./sidebar/Sidebar";
 
 /** The URL hash, kept in sync so links like #about can switch pages. */
 function useHash() {
@@ -27,13 +22,6 @@ function useHash() {
   }, []);
   return hash;
 }
-
-const SIDEBARS: Record<UiVariant, (props: SidebarProps) => ReactNode> = {
-  classic: ClassicSidebar,
-  tree: TreeSidebar,
-  grid: GridSidebar,
-  accordion: AccordionSidebar,
-};
 
 function download(data: Uint8Array, filename: string, type: string) {
   const url = URL.createObjectURL(new Blob([data as BlobPart], { type }));
@@ -138,25 +126,12 @@ export function App() {
     </>
   );
 
-  const [variant, setVariant] = useUiVariant();
-  const Sidebar = SIDEBARS[variant];
-
   return (
     <main className="app" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
-      <aside className={`panel ui-${variant}`}>
+      <aside className="panel">
         <header>
           <h1>Gridfinity Labels</h1>
           <p className="sub">Cullenect and pred labels, ready for multi-colour printing.</p>
-          <label className="ui-switch">
-            <span>Prototype layout</span>
-            <select value={variant} onChange={(e) => setVariant(e.target.value as UiVariant)}>
-              {UI_VARIANTS.map((v) => (
-                <option key={v.value} value={v.value}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
         </header>
 
         <Sidebar

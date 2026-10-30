@@ -2,7 +2,7 @@ import { useRef } from "react";
 import type { ManifoldToplevel } from "manifold-3d";
 import type { Segment } from "../label";
 import { SYMBOLS } from "../symbols";
-import { SymbolIcon, TextIcon } from "../components/SegmentEditor";
+import { SymbolIcon, TextIcon } from "../components/Icons";
 import { newSegment } from "../components/segmentOps";
 
 /** A "+ Add" button that opens the text and symbol palette. */
