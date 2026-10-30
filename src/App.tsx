@@ -23,9 +23,21 @@ import type { PreviewLabel, RowLayout } from "./preview";
 import { Segmented } from "./components/Segmented";
 import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
 import { SegmentEditor } from "./components/SegmentEditor";
+import { About } from "./components/About";
 
 /** Below this letter height, text gets hard to read with a 0.4 mm nozzle. */
 const MIN_LEGIBLE_CAP_HEIGHT = 4.4;
+
+/** The URL hash, kept in sync so links like #about can switch pages. */
+function useHash() {
+  const [hash, setHash] = useState(() => location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(location.hash);
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return hash;
+}
 
 function download(data: Uint8Array, filename: string, type: string) {
   const url = URL.createObjectURL(new Blob([data as BlobPart], { type }));
@@ -43,6 +55,8 @@ export function App() {
   const update = (patch: Partial<LabelState>) => setSession((s) => updateLabel(s, state.id, patch));
 
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
+  // The about page covers the app instead of replacing it, so the preview keeps its camera.
+  const showAbout = useHash() === "#about";
 
   const { engine, error: engineError } = useEngine();
   const builds = useLabels(engine, session.labels);
@@ -292,7 +306,7 @@ export function App() {
         <footer>
           Label geometry from <a href="https://github.com/ndevenish/gflabel">gflabel</a> (BSD-3). Cullenect system by{" "}
           <a href="https://makerworld.com/en/models/446624">Cullen J Webb</a>, pred labels by{" "}
-          <a href="https://www.printables.com/model/592545">pred</a>.
+          <a href="https://www.printables.com/model/592545">pred</a>. <a href="#about">About</a>
         </footer>
       </aside>
       <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />
@@ -335,6 +349,7 @@ export function App() {
           <div>{status}</div>
         </div>
       </section>
+      {showAbout && <About />}
     </main>
   );
 }
