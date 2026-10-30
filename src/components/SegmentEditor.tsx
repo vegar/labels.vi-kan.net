@@ -1,6 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { ManifoldToplevel } from "manifold-3d";
-import { isText, type Segment } from "../label";
+import {
+  isText,
+  symbolSegment,
+  textSegment,
+  type Segment,
+  type SymbolSegment,
+  type TextSegment,
+  type Weight,
+} from "../label";
+import type { Align } from "../text";
 import {
   DRIVES,
   renderSymbol,
@@ -261,16 +270,81 @@ function TextIcon() {
   );
 }
 
+const ALIGN_OPTIONS: { value: Align; label: string }[] = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];
+
+/** A labelled slider showing its value in mm. */
+function MmSlider(props: { label: string; min: number; max: number; value: number; onChange: (v: number) => void }) {
+  return (
+    <label className="field">
+      <span>
+        {props.label} <output>{props.value.toFixed(1)} mm</output>
+      </span>
+      <input
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={0.1}
+        value={props.value}
+        onChange={(e) => props.onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+
+/** Text, weight, alignment and letter height of a text segment. */
+function TextOptions({ seg, onChange }: { seg: TextSegment; onChange: (patch: Partial<TextSegment>) => void }) {
+  return (
+    <>
+      <label className="field">
+        <span>
+          Text <small>(one line per row)</small>
+        </span>
+        <textarea rows={2} spellCheck={false} value={seg.text} onChange={(e) => onChange({ text: e.target.value })} />
+      </label>
+      <div className="row">
+        <div className="field">
+          <span>Align</span>
+          <Segmented value={seg.align} options={ALIGN_OPTIONS} onChange={(align) => onChange({ align })} />
+        </div>
+        <div className="field">
+          <span>Weight</span>
+          <Segmented<Weight>
+            value={seg.weight}
+            options={[
+              { value: "regular", label: "Regular" },
+              { value: "bold", label: "Bold" },
+            ]}
+            onChange={(weight) => onChange({ weight })}
+          />
+        </div>
+      </div>
+      <MmSlider
+        label="Max letter height"
+        min={2}
+        max={9}
+        value={seg.maxCapHeight}
+        onChange={(maxCapHeight) => onChange({ maxCapHeight })}
+      />
+    </>
+  );
+}
+
 interface Props {
   wasm?: ManifoldToplevel;
   segments: Segment[];
   gap: number;
-  symbolSize: number;
-  onChange: (patch: { segments?: Segment[]; gap?: number; symbolSize?: number }) => void;
+  align: Align;
+  onChange: (patch: { segments?: Segment[]; gap?: number; align?: Align }) => void;
+  /** Shown at the end of the section, e.g. a warning about the result. */
+  children?: ReactNode;
 }
 
 /** What goes on the label, left to right: any mix of text and symbols. */
-export function SegmentEditor({ wasm, segments, gap, symbolSize, onChange }: Props) {
+export function SegmentEditor({ wasm, segments, gap, align, onChange, children }: Props) {
   const setSegments = (next: Segment[]) => onChange({ segments: next });
   const replace = (i: number, seg: Segment) => setSegments(segments.map((s, j) => (j === i ? seg : s)));
   const move = (i: number, by: number) => {
@@ -279,7 +353,10 @@ export function SegmentEditor({ wasm, segments, gap, symbolSize, onChange }: Pro
     next.splice(i + by, 0, s);
     setSegments(next);
   };
-  const hasSymbols = segments.some((s) => !isText(s));
+  // New segments copy the style of the last one of their kind.
+  const lastText = segments.filter(isText).at(-1);
+  const lastSymbol = segments.filter((s): s is SymbolSegment => !isText(s)).at(-1);
+  const growing = segments.some((s) => s.grow);
 
   return (
     <section>
@@ -289,7 +366,7 @@ export function SegmentEditor({ wasm, segments, gap, symbolSize, onChange }: Pro
         row is packed together.
       </p>
       <div className="symbol-palette">
-        <button type="button" title="Add text" onClick={() => setSegments([...segments, { kind: "text", text: "" }])}>
+        <button type="button" title="Add text" onClick={() => setSegments([...segments, textSegment("", lastText)])}>
           <TextIcon />
           <span>Text</span>
         </button>
@@ -299,7 +376,7 @@ export function SegmentEditor({ wasm, segments, gap, symbolSize, onChange }: Pro
             type="button"
             title={`Add ${info.name.toLowerCase()}`}
             disabled={!wasm}
-            onClick={() => setSegments([...segments, { ...info.defaults }])}
+            onClick={() => setSegments([...segments, symbolSegment(info.defaults, lastSymbol)])}
           >
             {wasm && <SymbolIcon wasm={wasm} symbol={info.defaults} />}
             <span>{info.name}</span>
@@ -340,56 +417,44 @@ export function SegmentEditor({ wasm, segments, gap, symbolSize, onChange }: Pro
                 </div>
               </div>
               {isText(seg) ? (
-                <label className="field">
-                  <span>
-                    Text <small>(one line per row)</small>
-                  </span>
-                  <textarea
-                    rows={2}
-                    spellCheck={false}
-                    value={seg.text}
-                    onChange={(e) => replace(i, { ...seg, text: e.target.value })}
-                  />
-                </label>
+                <TextOptions seg={seg} onChange={(p) => replace(i, { ...seg, ...p })} />
               ) : (
-                <SymbolOptions wasm={wasm} sym={seg} onChange={(p) => replace(i, { ...seg, ...p })} />
+                <>
+                  <SymbolOptions wasm={wasm} sym={seg} onChange={(p) => replace(i, { ...seg, ...p })} />
+                  {seg.grow && (
+                    <div className="field">
+                      <span>Align</span>
+                      <Segmented
+                        value={seg.align}
+                        options={ALIGN_OPTIONS}
+                        onChange={(align) => replace(i, { ...seg, align })}
+                      />
+                    </div>
+                  )}
+                  <MmSlider
+                    label="Height"
+                    min={3}
+                    max={9.4}
+                    value={seg.size}
+                    onChange={(size) => replace(i, { ...seg, size })}
+                  />
+                </>
               )}
             </li>
           ))}
         </ol>
       )}
 
+      {segments.length > 0 && !growing && (
+        <div className="field">
+          <span>Row position</span>
+          <Segmented value={align} options={ALIGN_OPTIONS} onChange={(align) => onChange({ align })} />
+        </div>
+      )}
       {segments.length > 1 && (
-        <label className="field">
-          <span>
-            Gap between segments <output>{gap.toFixed(1)} mm</output>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={5}
-            step={0.1}
-            value={gap}
-            onChange={(e) => onChange({ gap: Number(e.target.value) })}
-          />
-        </label>
+        <MmSlider label="Gap between segments" min={0} max={5} value={gap} onChange={(gap) => onChange({ gap })} />
       )}
-
-      {hasSymbols && (
-        <label className="field">
-          <span>
-            Symbol height <output>{symbolSize.toFixed(1)} mm</output>
-          </span>
-          <input
-            type="range"
-            min={3}
-            max={9.4}
-            step={0.1}
-            value={symbolSize}
-            onChange={(e) => onChange({ symbolSize: Number(e.target.value) })}
-          />
-        </label>
-      )}
+      {children}
     </section>
   );
 }

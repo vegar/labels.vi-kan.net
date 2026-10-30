@@ -1,13 +1,23 @@
 import { isBaseKind } from "./bases";
-import { DEFAULT_OPTIONS, isText, type LabelOptions, type Segment } from "./label";
+import {
+  DEFAULT_OPTIONS,
+  isText,
+  SYMBOL_SIZE,
+  symbolSegment,
+  TEXT_DEFAULTS,
+  textSegment,
+  type LabelOptions,
+  type Segment,
+  type SymbolSegment,
+  type TextSegment,
+  type Weight,
+} from "./label";
 import { migrateSymbol, symbolInfo, type LabelSymbol } from "./symbols";
-
-export type Weight = "regular" | "bold";
+import type { Align } from "./text";
 
 export interface LabelState extends LabelOptions {
   /** Stable key for the label list; not part of the geometry. */
   id: string;
-  weight: Weight;
   baseColor: string;
   textColor: string;
   symbolColor: string;
@@ -25,13 +35,12 @@ const STORAGE_KEY = "gridfinity-labels:v2";
 
 export const DEFAULT_STATE: Omit<LabelState, "id"> = {
   ...DEFAULT_OPTIONS,
-  weight: "bold",
   baseColor: "#1f2328",
   textColor: "#f4f4f0",
   symbolColor: "#f4f4f0",
   segments: [
-    { kind: "screw", headShape: "countersunk", drives: ["phillips"] },
-    { kind: "text", text: "M3 × 12" },
+    symbolSegment({ kind: "screw", headShape: "countersunk", drives: ["phillips"] }),
+    textSegment("M3 × 12"),
   ],
 };
 
@@ -47,26 +56,57 @@ interface LegacyFields {
   text?: string;
   symbols?: LabelSymbol[];
   symbolPosition?: "left" | "right";
+  /** Letter height, weight and symbol height, before they moved onto each segment. */
+  maxCapHeight?: number;
+  weight?: Weight;
+  symbolSize?: number;
 }
 
 /** One text with a row of symbols beside it, as segments in the same order. */
-function legacySegments({ text, symbols, symbolPosition }: LegacyFields): Segment[] {
+function legacySegments({ text, symbols, symbolPosition }: LegacyFields): Partial<Segment>[] {
   if (!Array.isArray(symbols) || JSON.stringify(symbols) === OLD_DEFAULT_SYMBOLS) {
-    symbols = DEFAULT_STATE.segments.filter((s): s is LabelSymbol => !isText(s));
+    symbols = DEFAULT_STATE.segments.filter((s) => !isText(s)).map(({ kind, headShape, drives }) => ({ kind, headShape, drives }));
   }
   // The text used to fill the width the symbols left.
-  const textSegments: Segment[] = text?.trim() || !symbols.length ? [{ kind: "text", text: text ?? "", grow: true }] : [];
+  const textSegments = text?.trim() || !symbols.length ? [{ kind: "text" as const, text: text ?? "", grow: true }] : [];
   return symbolPosition === "right" ? [...textSegments, ...symbols] : [...symbols, ...textSegments];
+}
+
+/**
+ * Bring a saved segment up to date: migrate old symbols, and fill in the
+ * style that used to be one setting for the whole label.
+ */
+function restoreSegment(seg: Partial<Segment>, label: LegacyFields & { align?: Align }): Segment {
+  if (seg.kind === "text") {
+    const text = seg as Partial<TextSegment>;
+    return {
+      ...text,
+      kind: "text",
+      text: text.text ?? "",
+      align: text.align ?? label.align ?? TEXT_DEFAULTS.align,
+      weight: text.weight ?? label.weight ?? TEXT_DEFAULTS.weight,
+      maxCapHeight: text.maxCapHeight ?? label.maxCapHeight ?? TEXT_DEFAULTS.maxCapHeight,
+    };
+  }
+  const symbol = migrateSymbol(seg as LabelSymbol);
+  return {
+    ...symbol,
+    ...(seg.grow ? { grow: true } : {}),
+    align: seg.align ?? "center",
+    size: (seg as { size?: number }).size ?? label.symbolSize ?? SYMBOL_SIZE,
+  };
 }
 
 /** Fill in missing fields and migrate old symbols in a saved label. */
 function restoreLabel(saved: Partial<LabelState> & LegacyFields): LabelState {
-  const { text, symbols, symbolPosition, ...rest } = saved;
+  const { text, symbols, symbolPosition, maxCapHeight, weight, symbolSize, ...rest } = saved;
   const state: LabelState = { ...DEFAULT_STATE, id: newId(), ...rest };
   // Labels from before there was a choice are Cullenect ones.
   if (!isBaseKind(state.base)) state.base = DEFAULT_STATE.base;
-  if (!Array.isArray(saved.segments)) state.segments = legacySegments({ text, symbols, symbolPosition });
-  state.segments = state.segments.map((s) => (isText(s) ? s : migrateSymbol(s)));
+  const segments: Partial<Segment>[] = Array.isArray(saved.segments)
+    ? saved.segments
+    : legacySegments({ text, symbols, symbolPosition });
+  state.segments = segments.map((s) => restoreSegment(s, saved));
   return state;
 }
 
@@ -117,14 +157,14 @@ export function saveSession(session: Session) {
  * so a batch of labels comes out consistent.
  */
 export function blankLabel(template: LabelState): LabelState {
-  const { base, units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize } = template;
-  const { weight, baseColor, textColor, symbolColor } = template;
+  const { base, units, ribs, align, gap, margin, style, textDepth } = template;
+  const { baseColor, textColor, symbolColor } = template;
   return {
     ...DEFAULT_STATE,
     id: newId(),
-    segments: [{ kind: "text", text: "" }],
-    ...{ base, units, ribs, align, gap, maxCapHeight, margin, style, textDepth, symbolSize },
-    ...{ weight, baseColor, textColor, symbolColor },
+    segments: [textSegment("", template.segments.find(isText))],
+    ...{ base, units, ribs, align, gap, margin, style, textDepth },
+    ...{ baseColor, textColor, symbolColor },
   };
 }
 
@@ -151,7 +191,7 @@ export function parseCloneTexts(input: string): string[] {
  */
 export function withText(segments: Segment[], text: string): Segment[] {
   const at = segments.findIndex(isText);
-  if (at < 0) return [...segments, { kind: "text", text }];
+  if (at < 0) return [...segments, textSegment(text)];
   return segments.map((s, i) => (i === at ? { ...s, text } : s));
 }
 
@@ -201,7 +241,7 @@ function textLine(state: LabelState, lineBreak: string): string {
 export function labelTitle(state: LabelState): string {
   const text = textLine(state, " · ");
   if (text) return text;
-  const symbols = state.segments.filter((s): s is LabelSymbol => !isText(s));
+  const symbols = state.segments.filter((s): s is SymbolSegment => !isText(s));
   if (symbols.length === 1) return symbolInfo(symbols[0].kind).name;
   return symbols.length ? `${symbols.length} symbols` : "Blank";
 }

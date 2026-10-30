@@ -3,11 +3,11 @@ import opentype, { type Font } from "opentype.js";
 import wasmUrl from "manifold-3d/manifold.wasm?url";
 import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "./manifold";
-import type { Weight } from "./state";
+import type { Fonts } from "./label";
 
 export interface Engine {
   wasm: ManifoldToplevel;
-  fonts: Record<Weight, Font>;
+  fonts: Fonts;
 }
 
 export type EngineStatus = { engine: Engine; error?: undefined } | { engine?: undefined; error?: string };

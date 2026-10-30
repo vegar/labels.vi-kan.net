@@ -13,9 +13,11 @@ import {
   type LabelState,
   type Session,
 } from "../src/state";
-import type { Segment } from "../src/label";
+import { symbolSegment, textSegment } from "../src/label";
+import type { LabelSymbol } from "../src/symbols";
 
-const text = (t: string): Segment => ({ kind: "text", text: t });
+const text = (t: string) => textSegment(t);
+const nut = symbolSegment({ kind: "nut" });
 const texts = (l: LabelState) => l.segments.filter((s) => s.kind === "text").map((s) => (s as { text: string }).text);
 const label = (id: string, patch: Partial<LabelState> = {}): LabelState => ({ ...DEFAULT_STATE, id, ...patch });
 const session = (...ids: string[]): Session => ({ labels: ids.map((id) => label(id)), selected: ids[0] });
@@ -31,7 +33,8 @@ describe("parseSession", () => {
   it("migrates the single label saved by earlier versions", () => {
     const s = parseSession(null, JSON.stringify({ text: "M4", units: 2 }));
     expect(s.labels).toHaveLength(1);
-    expect(s.labels[0]).toMatchObject({ units: 2, weight: "bold" });
+    expect(s.labels[0]).toMatchObject({ units: 2 });
+    expect(s.labels[0].segments.at(-1)).toMatchObject({ weight: "bold", maxCapHeight: 6, align: "center" });
     expect(texts(s.labels[0])).toEqual(["M4"]);
     expect(s.labels[0].id).toBeTruthy();
   });
@@ -48,7 +51,13 @@ describe("parseSession", () => {
     const nut = { kind: "nut" };
     const saved = JSON.stringify({
       labels: [
-        { id: "a", text: "M3", symbols: [screw, nut], symbolPosition: "left" },
+        {
+          id: "a",
+          text: "M3",
+          symbols: [screw, nut],
+          symbolPosition: "left",
+          ...{ weight: "regular", maxCapHeight: 5, symbolSize: 6, align: "left" },
+        },
         { id: "b", text: "M3", symbols: [screw], symbolPosition: "right" },
         { id: "c", text: "", symbols: [nut] },
         { id: "d", text: "M5", symbols: [] },
@@ -58,15 +67,41 @@ describe("parseSession", () => {
     });
     const [a, b, c, d, e] = parseSession(saved, null).labels;
     // The text grows to fill the width, like it used to.
+    // Letter height, weight and symbol height move from the label onto its segments.
     const grown = (t: string) => ({ ...text(t), grow: true });
-    expect(a.segments).toEqual([screw, nut, grown("M3")]);
-    expect(b.segments).toEqual([grown("M3"), screw]);
-    expect(c.segments).toEqual([nut]);
+    const sym = symbolSegment;
+    expect(a.segments).toEqual([
+      { ...sym(screw as LabelSymbol), size: 6 },
+      { ...sym(nut as LabelSymbol), size: 6 },
+      { ...grown("M3"), weight: "regular", maxCapHeight: 5, align: "left" },
+    ]);
+    expect(b.segments).toEqual([grown("M3"), sym(screw as LabelSymbol)]);
+    expect(c.segments).toEqual([sym(nut as LabelSymbol)]);
     expect(d.segments).toEqual([grown("M5")]);
-    expect(e.segments).toEqual([{ kind: "nut", nutType: "square" }, grown("M6")]);
+    expect(e.segments).toEqual([sym({ kind: "nut", nutType: "square" }), grown("M6")]);
     expect(a).not.toHaveProperty("text");
     expect(a).not.toHaveProperty("symbols");
     expect(a).not.toHaveProperty("symbolPosition");
+    for (const key of ["weight", "maxCapHeight", "symbolSize"]) expect(a).not.toHaveProperty(key);
+  });
+
+  it("moves the label-wide text and symbol settings onto saved segments", () => {
+    const saved = JSON.stringify({
+      labels: [
+        {
+          id: "a",
+          segments: [{ kind: "text", text: "M3", grow: true }, { kind: "nut" }],
+          ...{ weight: "regular", maxCapHeight: 4, symbolSize: 5, align: "right" },
+        },
+      ],
+      selected: "a",
+    });
+    const [a] = parseSession(saved, null).labels;
+    expect(a.segments).toEqual([
+      { kind: "text", text: "M3", grow: true, weight: "regular", maxCapHeight: 4, align: "right" },
+      { kind: "nut", align: "center", size: 5 },
+    ]);
+    expect(a.align).toBe("right");
   });
 
   it("makes labels saved before the holder choice Cullenect ones", () => {
@@ -94,7 +129,6 @@ describe("label list", () => {
   });
 
   it("clones a label once per text, replacing only its first text", () => {
-    const nut: Segment = { kind: "nut" };
     const segments = [nut, text("M3 × 12"), text("DIN 912")];
     const s = updateLabel(session("a", "b"), "a", { units: 3, style: "raised", baseColor: "#ff0000", segments });
     const next = cloneLabel(s, "a", ["M3 × 16", "M3 × 20"]);
@@ -112,7 +146,6 @@ describe("label list", () => {
   });
 
   it("adds the text to a clone of a label with symbols only", () => {
-    const nut: Segment = { kind: "nut" };
     const s = updateLabel(session("a"), "a", { segments: [nut] });
     expect(cloneLabel(s, "a", ["M4"]).labels[1].segments).toEqual([nut, text("M4")]);
   });
@@ -145,9 +178,9 @@ describe("label list", () => {
 
   it("names labels by their text", () => {
     expect(labelTitle(label("a", { segments: [text("M3\n12 mm")] }))).toBe("M3 · 12 mm");
-    expect(labelTitle(label("a", { segments: [text("M3"), { kind: "nut" }, text("DIN 934")] }))).toBe("M3 DIN 934");
-    expect(labelTitle(label("a", { segments: [{ kind: "nut" }, text(" ")] }))).toBe("Nut");
-    expect(labelTitle(label("a", { segments: [{ kind: "nut" }, { kind: "washer" }] }))).toBe("2 symbols");
+    expect(labelTitle(label("a", { segments: [text("M3"), nut, text("DIN 934")] }))).toBe("M3 DIN 934");
+    expect(labelTitle(label("a", { segments: [nut, text(" ")] }))).toBe("Nut");
+    expect(labelTitle(label("a", { segments: [nut, symbolSegment({ kind: "washer" })] }))).toBe("2 symbols");
     expect(labelTitle(label("a", { segments: [] }))).toBe("Blank");
   });
 });
