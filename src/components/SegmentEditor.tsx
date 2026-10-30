@@ -44,6 +44,8 @@ export const NUT_TYPES: { value: NutType; label: string }[] = [
 
 /** A small drawing of a symbol, rendered with the same geometry as the label. */
 export function SymbolIcon({ wasm, symbol }: { wasm: ManifoldToplevel; symbol: LabelSymbol }) {
+  // Keyed by content, so icons for symbols built inline don't redraw on every render.
+  const key = JSON.stringify(symbol);
   const icon = useMemo(() => {
     const shape = renderSymbol(wasm, symbol, 10, 24);
     const { min, max } = shape.bounds();
@@ -54,7 +56,7 @@ export function SymbolIcon({ wasm, symbol }: { wasm: ManifoldToplevel; symbol: L
       path,
       viewBox: `${min[0] - pad} ${-max[1] - pad} ${max[0] - min[0] + 2 * pad} ${max[1] - min[1] + 2 * pad}`,
     };
-  }, [wasm, symbol]);
+  }, [wasm, key]);
   return (
     <svg className="symbol-icon" viewBox={icon.viewBox} aria-hidden="true">
       <path d={icon.path} fillRule="evenodd" />

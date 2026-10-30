@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ManifoldToplevel } from "manifold-3d";
 import { BASE_KINDS, baseInfo, type BaseKind } from "../bases";
 import { CloneDialog } from "../components/CloneDialog";
 import { holderPatch, MIN_LEGIBLE_CAP_HEIGHT } from "../components/LabelFields";
@@ -17,6 +18,7 @@ import { addLabel, blankLabel, cloneLabel, labelTitle, removeLabel, type LabelSt
 import {
   DRIVES,
   SYMBOLS,
+  type Drive,
   symbolInfo,
   symbolModifiers,
   type LabelSymbol,
@@ -26,7 +28,18 @@ import {
   type SymbolKind,
 } from "../symbols";
 import { AddSegmentMenu } from "./AddSegmentMenu";
-import { Category, Check, Note, NumberInput, Prop, PropertyGrid, Select } from "./PropertyGrid";
+import {
+  Category,
+  Check,
+  IconCheck,
+  IconSelect,
+  Note,
+  NumberInput,
+  Prop,
+  PropertyGrid,
+  Select,
+  type IconOption,
+} from "./PropertyGrid";
 import type { SidebarProps } from "./types";
 import { useSegmentSelection } from "./useSegmentSelection";
 
@@ -235,21 +248,25 @@ function LabelGrid({ state, update, textDepth, maxDepth, shrunk }: SidebarProps)
   );
 }
 
-const KIND_OPTIONS: { value: "text" | SymbolKind; label: string }[] = [
-  { value: "text", label: "Text" },
-  ...SYMBOLS.map((s) => ({ value: s.kind, label: s.name })),
-];
-
-function SegmentGrid({ state, update, index }: SidebarProps & { index: number }) {
+function SegmentGrid({ state, update, engine, index }: SidebarProps & { index: number }) {
   const seg = state.segments[index];
   const replace = (next: Segment) => update({ segments: replaceSegment(state.segments, index, next) });
+  const wasm = engine?.wasm;
+  const kinds: IconOption<"text" | SymbolKind>[] = [
+    { value: "text", label: "Text", icon: <TextIcon /> },
+    ...SYMBOLS.map((s) => ({
+      value: s.kind,
+      label: s.name,
+      icon: wasm && <SymbolIcon wasm={wasm} symbol={s.defaults} />,
+    })),
+  ];
   return (
     <PropertyGrid>
       <Category title="Segment">
         <Prop name="Type">
-          <Select
+          <IconSelect
             value={seg.kind}
-            options={KIND_OPTIONS}
+            options={kinds}
             onChange={(kind) => replace({ ...newSegment(kind, state.segments), grow: seg.grow })}
           />
         </Prop>
@@ -311,13 +328,24 @@ function SegmentGrid({ state, update, index }: SidebarProps & { index: number })
           </>
         )}
       </Category>
-      {!isText(seg) && <SymbolRows sym={seg} onChange={(p) => replace({ ...seg, ...p })} />}
+      {!isText(seg) && <SymbolRows wasm={wasm} sym={seg} onChange={(p) => replace({ ...seg, ...p })} />}
     </PropertyGrid>
   );
 }
 
-/** The symbol's options as dropdowns and checkboxes, mirroring SymbolOptions. */
-function SymbolRows({ sym, onChange }: { sym: LabelSymbol; onChange: (patch: Partial<LabelSymbol>) => void }) {
+/**
+ * The symbol's options as dropdowns and checkboxes, mirroring SymbolOptions.
+ * Every choice shows a drawing of the symbol with that choice applied.
+ */
+function SymbolRows({
+  wasm,
+  sym,
+  onChange,
+}: {
+  wasm?: ManifoldToplevel;
+  sym: LabelSymbol;
+  onChange: (patch: Partial<LabelSymbol>) => void;
+}) {
   const info = symbolInfo(sym.kind);
   const isScrew = sym.kind === "screw";
   const view = isScrew ? (sym.view ?? "both") : undefined;
@@ -327,28 +355,33 @@ function SymbolRows({ sym, onChange }: { sym: LabelSymbol; onChange: (patch: Par
   const drive = sym.hexHead ? "hexhead" : (drives.find((d) => d !== "security") ?? "none");
   const nutType = sym.nutType ?? "regular";
   const modifiers = symbolModifiers(sym);
+  const icon = (symbol: LabelSymbol) => wasm && <SymbolIcon wasm={wasm} symbol={symbol} />;
+  /** The symbol as it would look with `patch`. */
+  const preview = (patch: Partial<LabelSymbol>) => icon({ ...sym, ...patch });
+  /** Just the drive, seen head on. */
+  const driveIcon = (patch: Partial<LabelSymbol>) => icon({ kind: "screw", view: "drive", ...patch });
 
   return (
     <Category title={info.name}>
       {isScrew && (
         <>
           <Prop name="Style">
-            <Select<ScrewStyle>
+            <IconSelect<ScrewStyle>
               value={sym.style ?? "regular"}
               options={[
-                { value: "regular", label: "Regular" },
-                { value: "cullenect", label: "Cullenect" },
+                { value: "regular", label: "Regular", icon: preview({ style: "regular" }) },
+                { value: "cullenect", label: "Cullenect", icon: preview({ style: "cullenect" }) },
               ]}
               onChange={(style) => onChange({ style })}
             />
           </Prop>
           <Prop name="Show">
-            <Select<ScrewView>
+            <IconSelect<ScrewView>
               value={view!}
               options={[
-                { value: "both", label: "Drive and side" },
-                { value: "drive", label: "Drive only" },
-                { value: "side", label: "Side only" },
+                { value: "both", label: "Drive and side", icon: preview({ view: "both" }) },
+                { value: "drive", label: "Drive only", icon: preview({ view: "drive" }) },
+                { value: "side", label: "Side only", icon: preview({ view: "side" }) },
               ]}
               onChange={(view) => onChange({ view })}
             />
@@ -358,16 +391,23 @@ function SymbolRows({ sym, onChange }: { sym: LabelSymbol; onChange: (patch: Par
       {sym.kind === "nut" && (
         <>
           <Prop name="Type">
-            <Select value={nutType} options={NUT_TYPES} onChange={(nutType) => onChange({ nutType })} />
+            <IconSelect
+              value={nutType}
+              options={NUT_TYPES.map((t) => ({
+                ...t,
+                icon: icon({ kind: "nut", nutType: t.value, nutView: t.value === "lock" ? "side" : "top" }),
+              }))}
+              onChange={(nutType) => onChange({ nutType })}
+            />
           </Prop>
           {nutType !== "square" && nutType !== "tnut" && (
             <Prop name="Show">
-              <Select<NutView>
+              <IconSelect<NutView>
                 value={sym.nutView ?? "top"}
                 options={[
-                  { value: "both", label: "Top and side" },
-                  { value: "top", label: "Top only" },
-                  { value: "side", label: "Side only" },
+                  { value: "both", label: "Top and side", icon: preview({ nutView: "both" }) },
+                  { value: "top", label: "Top only", icon: preview({ nutView: "top" }) },
+                  { value: "side", label: "Side only", icon: preview({ nutView: "side" }) },
                 ]}
                 onChange={(nutView) => onChange({ nutView })}
               />
@@ -378,37 +418,50 @@ function SymbolRows({ sym, onChange }: { sym: LabelSymbol; onChange: (patch: Par
       {info.drives && showsDrive && (
         <>
           <Prop name="Drive">
-            <Select<string>
+            <IconSelect<string>
               value={drive}
               options={[
-                { value: "none", label: "None" },
-                ...DRIVES.filter((d) => d.value !== "security").map((d) => ({ value: d.value, label: d.label })),
-                ...(isScrew ? [{ value: "hexhead", label: "Hex head bolt" }] : []),
+                { value: "none", label: "None", icon: driveIcon({ drives: [] }) },
+                ...DRIVES.filter((d) => d.value !== "security").map((d) => ({
+                  value: d.value as string,
+                  label: d.label,
+                  icon: driveIcon({ drives: [d.value] }),
+                })),
+                ...(isScrew ? [{ value: "hexhead", label: "Hex head bolt", icon: driveIcon({ hexHead: true }) }] : []),
               ]}
               onChange={(v) =>
                 v === "hexhead"
                   ? onChange({ hexHead: true, drives: [] })
-                  : onChange({ hexHead: false, drives: [...(v === "none" ? [] : [v as never]), ...pin] })
+                  : onChange({ hexHead: false, drives: [...(v === "none" ? [] : [v as Drive]), ...pin] })
               }
             />
           </Prop>
-          <Prop name="Security pin">
-            <Check
-              checked={drives.includes("security")}
-              onChange={(on) =>
-                onChange({
-                  drives: [...drives.filter((d) => d !== "security"), ...(on ? (["security"] as const) : [])],
-                })
-              }
-            />
-          </Prop>
+          {!sym.hexHead && (
+            <Prop name="Security pin">
+              <IconCheck
+                checked={drives.includes("security")}
+                icon={driveIcon({ drives: [...drives.filter((d) => d !== "security"), "security"] })}
+                onChange={(on) =>
+                  onChange({
+                    drives: [...drives.filter((d) => d !== "security"), ...(on ? (["security"] as const) : [])],
+                  })
+                }
+              />
+            </Prop>
+          )}
         </>
       )}
       {info.headShapes && !sym.hexHead && view !== "drive" && (
         <Prop name="Head">
-          <Select
+          <IconSelect
             value={sym.headShape ?? "pan"}
-            options={info.headShapes.map((h) => ({ value: h, label: HEAD_LABELS[h] }))}
+            options={info.headShapes.map((h) => ({
+              value: h,
+              label: HEAD_LABELS[h],
+              icon: isScrew
+                ? icon({ kind: "screw", style: sym.style, view: "side", headShape: h, tapping: sym.tapping })
+                : icon({ kind: "bolt", headShape: h, length: 14, tapping: sym.tapping }),
+            }))}
             onChange={(headShape) => onChange({ headShape })}
           />
         </Prop>
@@ -426,7 +479,12 @@ function SymbolRows({ sym, onChange }: { sym: LabelSymbol; onChange: (patch: Par
       )}
       {modifiers.map((m) => (
         <Prop key={m} name={MODIFIER_LABELS[m]}>
-          <Check checked={!!sym[m]} onChange={(on) => onChange({ [m]: on })} />
+          <IconCheck
+            checked={!!sym[m]}
+            // What the symbol looks like with this turned on; a side view shows it best.
+            icon={preview({ [m]: true, ...(isScrew && { view: "side" }) })}
+            onChange={(on) => onChange({ [m]: on })}
+          />
         </Prop>
       ))}
       {!info.drives && !info.headShapes && !info.length && sym.kind !== "nut" && modifiers.length === 0 && (
