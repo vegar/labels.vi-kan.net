@@ -202,6 +202,7 @@ input[type="color"] {
 
 .printer {
   flex-basis: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -217,6 +218,7 @@ input[type="color"] {
 .printer select {
   flex: 1;
   min-width: 0;
+  width: 0;
 }
 
 .custom-bed {

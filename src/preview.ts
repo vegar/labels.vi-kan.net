@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Manifold } from "manifold-3d";
+import { plateModel } from "./bedModel";
 import { bounds, packPlates, plateColumns, plateCount, plateOrigin, type Bed } from "./bed";
 
 export interface PreviewPart {
@@ -26,12 +27,6 @@ export interface RowLayout {
 
 /** Space between neighbouring labels, in mm. */
 const GAP = 4;
-
-/** A textured-PEI grey that dark and light labels both stand out on. */
-const PLATE_COLOR = 0x8c9299;
-const PLATE_LINE_COLOR = 0x70767d;
-/** Grid lines on the plate, in mm. */
-const PLATE_GRID = 10;
 
 /** How far the pointer may move, in px, before a press counts as an orbit drag rather than a click. */
 const CLICK_SLOP = 5;
@@ -171,12 +166,12 @@ export class Preview {
       this.show(label, target);
     });
     this.showPlates(bed, count);
-    this.reframe(`bed:${bed.width}:${bed.depth}:${count}`, width, depth);
+    this.reframe(`bed:${bed.width}:${bed.depth}:${count}`, width, depth + 20);
   }
 
   /** Draw `count` plates of size `bed`, or none. */
   private showPlates(bed: Bed | null, count: number) {
-    const key = bed ? `${bed.width}:${bed.depth}:${count}` : "";
+    const key = bed ? `${JSON.stringify(bed)}:${count}` : "";
     if (key === this.platesKey) return;
     this.platesKey = key;
     clearGroup(this.plates);
@@ -184,20 +179,8 @@ export class Preview {
     const { center } = plateGridExtent(count, bed);
     for (let i = 0; i < count; i++) {
       const [ox, oy] = plateOrigin(i, count, bed);
-      const plate = new THREE.Group();
+      const plate = plateModel(bed, i);
       plate.position.set(ox - center[0], oy - center[1], 0);
-      const surface = new THREE.Mesh(
-        new THREE.PlaneGeometry(bed.width, bed.depth),
-        new THREE.MeshStandardMaterial({ color: PLATE_COLOR, roughness: 0.9, metalness: 0 }),
-      );
-      surface.position.set(bed.width / 2, bed.depth / 2, -0.05);
-      plate.add(surface);
-      const lines: number[] = [];
-      for (let x = PLATE_GRID; x < bed.width; x += PLATE_GRID) lines.push(x, 0, 0, x, bed.depth, 0);
-      for (let y = PLATE_GRID; y < bed.depth; y += PLATE_GRID) lines.push(0, y, 0, bed.width, y, 0);
-      const grid = new THREE.BufferGeometry();
-      grid.setAttribute("position", new THREE.Float32BufferAttribute(lines, 3));
-      plate.add(new THREE.LineSegments(grid, new THREE.LineBasicMaterial({ color: PLATE_LINE_COLOR })));
       this.plates.add(plate);
     }
   }
@@ -339,7 +322,7 @@ function clearGroup(group: THREE.Group) {
     else {
       const mesh = child as THREE.Mesh;
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      for (const material of [mesh.material].flat()) material.dispose();
     }
     group.remove(child);
   }

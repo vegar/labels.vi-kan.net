@@ -94,6 +94,10 @@ const CHOICES: { title: string; text: ReactNode }[] = [
     text: "Labels that don't fit go where Bambu Studio and OrcaSlicer put the next plates, a fifth of a plate apart in a square-ish grid. The file carries no printer settings, so your own presets stay as they are.",
   },
   {
+    title: "Printers and plates",
+    text: "Print areas and keep-clear zones (the purge corner on P1 and X1, the strips only one nozzle of an H2D, H2C or X2D reaches) come from the printer profiles in Bambu Studio and OrcaSlicer. Labels are kept clear of those zones. The plates in the bed view are drawn here rather than taken from the slicers, whose models are AGPL.",
+  },
+  {
     title: "Colours in Bambu Studio and OrcaSlicer",
     text: "These slicers ignore the colours in a standard 3MF, so the file also carries their own settings file with one filament slot per colour, shared by all labels.",
   },
