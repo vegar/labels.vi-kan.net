@@ -9,6 +9,8 @@ export type Weight = "regular" | "bold";
 export type Fonts = Record<Weight, Font>;
 
 interface SegmentOptions {
+  /** CSS hex colour for this segment. Unset uses the label's default text or symbol colour. */
+  color?: string;
   /** Take a share of the spare width. Without any growing segments, the row is packed together. */
   grow?: boolean;
   /** Where the segment sits in its share when it grows. For text, also how its lines line up. */
@@ -83,12 +85,18 @@ export function maxEmbeddedDepth(opts: Pick<LabelOptions, "base" | "units" | "ri
   return baseInfo(opts.base).maxEmbeddedDepth({ ...opts, raised: false });
 }
 
+/** The solid of one segment, so each can get its own colour. */
+export interface SegmentSolid {
+  /** Index into the label's segments. */
+  index: number;
+  kind: "text" | "symbol";
+  manifold: Manifold;
+}
+
 export interface LabelParts {
   base: Manifold;
-  /** Undefined when the label has no text. */
-  text?: Manifold;
-  /** Undefined when the label has no symbols. */
-  symbols?: Manifold;
+  /** One per segment with something to print, in segment order. */
+  segments: SegmentSolid[];
   /** Height of the smallest capital letters on the label, in mm. */
   capHeight?: number;
   /** True when text came out smaller than its max letter height, to fit. */
@@ -106,7 +114,7 @@ function centered(shape: CrossSection): CrossSection {
   return shape.translate(-(min[0] + max[0]) / 2, -(min[1] + max[1]) / 2);
 }
 
-type Item = { grow: boolean } & (
+type Item = { grow: boolean; index: number } & (
   | { text: true; segment: TextSegment; shape: CrossSection; maxCap: number }
   | { text: false; symbol: SymbolSegment; height: number }
 );
@@ -124,18 +132,18 @@ function layoutFace(wasm: ManifoldToplevel, fonts: Fonts, opts: LabelOptions) {
 
   // Text at a cap height of 1 mm; empty text takes no room.
   const items: Item[] = [];
-  for (const seg of opts.segments) {
+  opts.segments.forEach((seg, index) => {
     const grow = !!seg.grow;
-    if (!isText(seg)) items.push({ grow, text: false, symbol: seg, height: Math.min(seg.size, areaHeight) });
+    if (!isText(seg)) items.push({ grow, index, text: false, symbol: seg, height: Math.min(seg.size, areaHeight) });
     else {
       const shape = textBlock(wasm, fonts[seg.weight], seg.text, seg.align);
       if (shape) {
         const maxCap = Math.min(seg.maxCapHeight, areaHeight / size(shape).height);
-        items.push({ grow, text: true, segment: seg, shape, maxCap });
+        items.push({ grow, index, text: true, segment: seg, shape, maxCap });
       }
     }
-  }
-  if (items.length === 0) return {};
+  });
+  if (items.length === 0) return { shapes: [] };
 
   const texts = items.filter((it) => it.text);
   const symbols = items.filter((it) => !it.text);
@@ -199,36 +207,32 @@ function layoutFace(wasm: ManifoldToplevel, fonts: Fonts, opts: LabelOptions) {
 
   // Too many segments to fit: shrink the whole row, gaps and all.
   const overflow = Math.min(1, areaWidth / rowWidth);
-  const union = (keep: boolean) => {
-    const parts = placed.filter((_, i) => items[i].text === keep);
-    return parts.length ? wasm.CrossSection.union(parts).scale(overflow) : undefined;
-  };
+  const faceShapes = placed.map((s, i) => ({ index: items[i].index, text: items[i].text, shape: s.scale(overflow) }));
   // The smallest letters on the label, to warn when they get hard to read.
   const capHeight = texts.length ? Math.min(...texts.map((it) => it.maxCap)) * textFit * overflow : undefined;
   const shrunk = texts.some((it) => it.maxCap * textFit * overflow < it.segment.maxCapHeight - 1e-3);
-  return { text: union(true), symbols: union(false), capHeight, shrunk };
+  return { shapes: faceShapes, capHeight, shrunk };
 }
 
 /**
- * Build the label as separate solids (body, text, symbols), so they can be
- * given different colours in the preview and in the exported 3MF.
+ * Build the label as separate solids (the body and one per segment), so they
+ * can be given different colours in the preview and in the exported 3MF.
  */
 export function buildLabel(wasm: ManifoldToplevel, fonts: Fonts, opts: LabelOptions): LabelParts {
   let base = baseInfo(opts.base).body(wasm, { ...opts, raised: opts.style === "raised" });
   const face = layoutFace(wasm, fonts, opts);
 
   const depth = opts.style === "embedded" ? Math.min(opts.textDepth, maxEmbeddedDepth(opts)) : opts.textDepth;
-  // Flush: cut the shape out of the base and fill the hole. Raised: stand it on the face.
-  const solid = (shape: CrossSection | undefined) => {
-    if (!shape || shape.isEmpty()) return undefined;
-    const extruded = shape.extrude(depth);
-    if (opts.style === "raised") return extruded;
-    const inlay = extruded.translate(0, 0, -depth);
-    base = base.subtract(inlay);
-    return inlay;
-  };
-
-  const text = solid(face.text);
-  const symbols = solid(face.symbols);
-  return { base, text, symbols, capHeight: face.capHeight, shrunk: face.shrunk };
+  // Flush: cut the shapes out of the base and fill the holes. Raised: stand them on the face.
+  const segments: SegmentSolid[] = face.shapes
+    .filter(({ shape }) => !shape.isEmpty())
+    .map(({ index, text, shape }) => {
+      const extruded = shape.extrude(depth);
+      const manifold = opts.style === "raised" ? extruded : extruded.translate(0, 0, -depth);
+      return { index, kind: text ? "text" : "symbol", manifold };
+    });
+  if (opts.style === "embedded" && segments.length) {
+    base = base.subtract(wasm.Manifold.union(segments.map((s) => s.manifold)));
+  }
+  return { base, segments, capHeight: face.capHeight, shrunk: face.shrunk };
 }

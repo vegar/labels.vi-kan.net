@@ -17,7 +17,7 @@ import {
   segmentSummary,
 } from "../components/segmentOps";
 import { isText, type Segment, type Weight } from "../label";
-import { addLabel, blankLabel, cloneLabel, labelTitle, removeLabel, type LabelState } from "../state";
+import { addLabel, blankLabel, cloneLabel, labelTitle, removeLabel, segmentColor, type LabelState } from "../state";
 import {
   DRIVES,
   SYMBOLS,
@@ -240,10 +240,10 @@ function LabelGrid({ state, update, textDepth, maxDepth, shrunk }: SidebarProps)
         <Prop name="Label colour">
           <input type="color" value={state.baseColor} onChange={(e) => update({ baseColor: e.target.value })} />
         </Prop>
-        <Prop name="Text colour">
+        <Prop name="Default text colour" title="For text segments without their own colour">
           <input type="color" value={state.textColor} onChange={(e) => update({ textColor: e.target.value })} />
         </Prop>
-        <Prop name="Symbol colour">
+        <Prop name="Default symbol colour" title="For symbol segments without their own colour">
           <input type="color" value={state.symbolColor} onChange={(e) => update({ symbolColor: e.target.value })} />
         </Prop>
       </Category>
@@ -270,11 +270,28 @@ function SegmentGrid({ state, update, engine, index }: SidebarProps & { index: n
           <IconSelect
             value={seg.kind}
             options={kinds}
-            onChange={(kind) => replace({ ...newSegment(kind, state.segments), grow: seg.grow })}
+            onChange={(kind) => replace({ ...newSegment(kind, state.segments), grow: seg.grow, color: seg.color })}
           />
         </Prop>
         <Prop name="Grow" title="Take a share of the spare width">
           <Check checked={!!seg.grow} onChange={(grow) => replace({ ...seg, grow })} />
+        </Prop>
+        <Prop name="Own colour" title={`Off uses the label's default ${isText(seg) ? "text" : "symbol"} colour`}>
+          <span className="colour-override">
+            <Check
+              checked={seg.color !== undefined}
+              onChange={(own) => {
+                const { color, ...rest } = seg;
+                replace(own ? { ...rest, color: segmentColor(state, seg) } : rest);
+              }}
+            />
+            <input
+              type="color"
+              value={segmentColor(state, seg)}
+              disabled={seg.color === undefined}
+              onChange={(e) => replace({ ...seg, color: e.target.value })}
+            />
+          </span>
         </Prop>
         {isText(seg) && (
           <Prop name="Text">

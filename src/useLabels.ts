@@ -17,7 +17,8 @@ interface Built {
 
 /** Everything that changes a label's geometry. Colours and the id don't. */
 function geometryKey(state: LabelState): string {
-  const { base, units, ribs, segments, align, gap, margin, style, textDepth } = state;
+  const { base, units, ribs, align, gap, margin, style, textDepth } = state;
+  const segments = state.segments.map(({ color, ...rest }) => rest);
   return JSON.stringify([base, units, ribs, segments, align, gap, margin, style, textDepth]);
 }
 
@@ -33,8 +34,7 @@ function build(engine: Engine, state: LabelState): BuildResult {
 
 function free(parts: LabelParts | undefined) {
   parts?.base.delete();
-  parts?.text?.delete();
-  parts?.symbols?.delete();
+  parts?.segments.forEach((s) => s.manifold.delete());
 }
 
 /**
