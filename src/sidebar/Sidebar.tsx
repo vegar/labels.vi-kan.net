@@ -79,7 +79,7 @@ export function Sidebar(props: SidebarProps) {
                     <span className="label-title">{labelTitle(label)}</span>
                   </button>
                   <div className="row-actions">
-                    <button type="button" title="Clone with new texts" onClick={() => setCloning(label)}>
+                    <button type="button" title="Clone into a table of copies" onClick={() => setCloning(label)}>
                       ⧉
                     </button>
                     <button
@@ -163,7 +163,8 @@ export function Sidebar(props: SidebarProps) {
       {cloning && (
         <CloneDialog
           source={cloning}
-          onClone={(texts) => setSession((s) => cloneLabel(s, cloning.id, texts))}
+          wasm={engine?.wasm}
+          onClone={(rows) => setSession((s) => cloneLabel(s, cloning.id, rows))}
           onClose={() => setCloning(undefined)}
         />
       )}
