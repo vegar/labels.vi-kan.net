@@ -68,17 +68,16 @@ describe("renderSymbol", () => {
     expect(side[0].max[0] - side[0].min[0]).toBeCloseTo(8 * 1.6, 3);
   });
 
-  it("puts the drive in a Cullenect screw's head only when it is drawn alone", () => {
+  it("shows a Cullenect screw's drive in its head, and only when both are shown", () => {
     const area = (sym: LabelSymbol) => renderSymbol(wasm, sym, 8).area();
+    const pieces = (sym: LabelSymbol) => renderSymbol(wasm, sym, 8).decompose().length;
     const side: LabelSymbol = { kind: "screw", style: "cullenect", view: "side", headShape: "socket" };
-    expect(area({ ...side, drives: ["hex"] })).toBeLessThan(area(side));
+    expect(area({ ...side, drives: ["hex"] })).toBeCloseTo(area(side), 6);
     const both: LabelSymbol = { ...side, view: "both" };
-    const sideOfBoth = (sym: LabelSymbol) =>
-      renderSymbol(wasm, sym, 8)
-        .decompose()
-        .filter((p) => p.bounds().min[0] >= 0)
-        .reduce((a, p) => a + p.area(), 0);
-    expect(sideOfBoth({ ...both, drives: ["hex"] })).toBeCloseTo(sideOfBoth(both), 6);
+    expect(area({ ...both, drives: ["hex"] })).toBeLessThan(area(both));
+    expect(pieces({ ...both, drives: ["hex"] })).toBe(pieces({ ...side, drives: ["hex"] }));
+    // A hex head is drawn beside the bolt.
+    expect(pieces({ ...both, hexHead: true })).toBe(pieces(side) + 1);
   });
 
   it("mirrors a flipped screw", () => {
@@ -94,7 +93,7 @@ describe("renderSymbol", () => {
     expect(migrateSymbol(old("head", { drives: ["torx"] }))).toEqual({ kind: "screw", view: "drive", drives: ["torx"] });
     expect(migrateSymbol(old("hexhead", { drives: [] }))).toMatchObject({ view: "drive", hexHead: true });
     const bolt = migrateSymbol(old("cullbolt", { headShape: "socket", drives: ["hex"] }));
-    expect(bolt).toMatchObject({ kind: "screw", style: "cullenect", view: "side", flip: true, drives: ["hex"] });
+    expect(bolt).toMatchObject({ kind: "screw", style: "cullenect", view: "both", flip: true, drives: ["hex"] });
     expect(renderSymbol(wasm, bolt, 8).isEmpty()).toBe(false);
   });
 

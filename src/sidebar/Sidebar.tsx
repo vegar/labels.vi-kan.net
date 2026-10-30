@@ -381,7 +381,7 @@ function SymbolRows({
   const info = symbolInfo(sym.kind);
   const isScrew = sym.kind === "screw";
   const view = isScrew ? (sym.view ?? "both") : undefined;
-  const showsDrive = view !== "side" || sym.style === "cullenect";
+  const showsDrive = view !== "side";
   const drives = sym.drives ?? [];
   const pin = drives.includes("security") ? (["security"] as const) : [];
   const drive = sym.hexHead ? "hexhead" : (drives.find((d) => d !== "security") ?? "none");

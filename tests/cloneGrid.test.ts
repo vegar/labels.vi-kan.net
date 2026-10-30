@@ -18,7 +18,8 @@ describe("clone grid", () => {
   it("leaves out choices a screw's view doesn't draw", () => {
     expect(titles([{ ...screw, view: "drive" }])).toEqual(["Screw drive"]);
     expect(titles([{ ...screw, view: "side" }])).toEqual(["Screw head"]);
-    expect(titles([{ ...screw, view: "side", style: "cullenect" }])).toEqual(["Screw head", "Screw drive"]);
+    expect(titles([{ ...screw, view: "side", style: "cullenect" }])).toEqual(["Screw head"]);
+    expect(titles([{ ...screw, view: "both", style: "cullenect" }])).toEqual(["Screw head", "Screw drive"]);
   });
 
   it("reads and writes cells", () => {

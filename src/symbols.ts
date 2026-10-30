@@ -147,8 +147,8 @@ export function migrateSymbol(sym: LabelSymbol): LabelSymbol {
   if (kind === "tnut") return { kind: "nut", nutType: "tnut" };
   if (kind === "head") return { kind: "screw", view: "drive", drives: sym.drives };
   if (kind === "hexhead") return { kind: "screw", view: "drive", hexHead: true, drives: sym.drives };
-  // The old Cullenect bolt pointed the other way.
-  if (kind === "cullbolt") return { ...sym, kind: "screw", style: "cullenect", view: "side", flip: !sym.flip };
+  // The old Cullenect bolt pointed the other way, and had its drive in the head.
+  if (kind === "cullbolt") return { ...sym, kind: "screw", style: "cullenect", view: "both", flip: !sym.flip };
   return sym;
 }
 
@@ -439,7 +439,8 @@ function cullbolt(s: Sketcher, sym: LabelSymbol, height: number): CrossSection {
  * A screw shown as two separate drawings, like label.alch.shop: the head
  * seen from above with its drive, and the screw from the side. Either can be
  * hidden. The Cullenect style draws gflabel's threaded bolt 1.6× the row
- * height; on its own it carries the drive in its head, like in gflabel.
+ * height, and shows both by putting the drive in the bolt's head, like in
+ * gflabel. A hex head can't be shown that way, so it is drawn beside the bolt.
  */
 function screw(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSection {
   const view = sym.view ?? "both";
@@ -455,7 +456,7 @@ function screw(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSection {
 
   const side = () => {
     if (cullenect) {
-      const drives = view === "side" && !sym.hexHead ? sym.drives : [];
+      const drives = view === "both" && !sym.hexHead ? sym.drives : [];
       const { tapping, partial } = sym;
       return cullbolt(s, { kind: "screw", headShape, drives, tapping, partial }, height).scale([-1, 1]);
     }
@@ -468,7 +469,7 @@ function screw(s: Sketcher, sym: LabelSymbol, rowHeight: number): CrossSection {
 
   let shape: CrossSection;
   if (view === "drive") shape = drive();
-  else if (view === "side") shape = side();
+  else if (view === "side" || (cullenect && !sym.hexHead)) shape = side();
   else {
     const top = drive();
     const profile = side();
