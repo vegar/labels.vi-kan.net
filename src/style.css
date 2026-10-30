@@ -141,12 +141,6 @@ section {
   font-variant-numeric: tabular-nums;
 }
 
-.row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 textarea {
   font: inherit;
   font-size: 1rem;
@@ -190,24 +184,6 @@ input[type="range"] {
   background: var(--pressed);
   color: var(--accent);
   font-weight: 600;
-}
-
-.check {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 0.9rem;
-}
-
-.check:has(input:disabled) {
-  color: var(--muted);
-}
-
-.colors .color {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
 }
 
 input[type="color"] {
@@ -342,77 +318,6 @@ footer a {
   flex: none;
 }
 
-.symbol-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.symbol-list li {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.symbol-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-}
-
-.symbol-head .symbol-icon {
-  height: 20px;
-  width: 36px;
-}
-
-.symbol-head .grow {
-  margin-left: auto;
-  gap: 4px;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.symbol-head .grow + .symbol-actions {
-  margin-left: 4px;
-}
-
-.symbol-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 2px;
-}
-
-.symbol-actions button {
-  font: inherit;
-  font-size: 0.85rem;
-  width: 28px;
-  height: 26px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.symbol-actions button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-
-.field.inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-}
-
 input[type="number"] {
   font: inherit;
   width: 72px;
@@ -421,81 +326,6 @@ input[type="number"] {
   border-radius: 6px;
   background: var(--bg);
   color: var(--text);
-}
-
-.icon-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.icon-picker button {
-  width: 38px;
-  height: 34px;
-  padding: 5px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-}
-
-.icon-picker.wide button {
-  width: 50px;
-}
-
-.icon-picker .symbol-icon {
-  width: 100%;
-  height: 100%;
-}
-
-.icon-picker button[aria-pressed="true"] {
-  background: var(--pressed);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.label-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.label-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 6px 4px 4px;
-}
-
-.label-list li[aria-current="true"] {
-  background: var(--pressed);
-  border-color: var(--accent);
-}
-
-.label-pick {
-  font: inherit;
-  font-size: 0.9rem;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
 }
 
 .label-title {
@@ -705,4 +535,351 @@ input[type="number"] {
 
 .about dd {
   margin: 2px 0 0;
+}
+
+/* ---- Sidebar: outline and property grid ---- */
+
+select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+h2 small {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: normal;
+  margin-left: 4px;
+}
+
+.row-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.row-actions button {
+  font: inherit;
+  font-size: 0.75rem;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.row-actions button:hover:not(:disabled) {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.row-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Only show row actions on the hovered or selected row. */
+.outline-row:not(:hover):not([aria-selected="true"]) .row-actions {
+  visibility: hidden;
+}
+
+.export.sticky {
+  position: sticky;
+  bottom: -20px;
+  margin: 0 -20px -20px;
+  padding: 12px 20px 20px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  z-index: 1;
+}
+
+.add-menu summary {
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.add-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.add-menu summary:hover {
+  color: var(--accent);
+}
+
+.add-menu[open] summary {
+  color: var(--accent);
+}
+
+.add-menu .symbol-palette {
+  padding: 6px 0 8px;
+}
+
+.outline,
+.outline ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.outline {
+  display: flex;
+  flex-direction: column;
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px;
+}
+
+.outline-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.outline-row:hover {
+  background: var(--bg);
+}
+
+.outline-row[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.outline-row[aria-selected="true"] .outline-pick,
+.outline-row[aria-selected="true"] .row-actions button {
+  color: var(--accent-text);
+}
+
+.outline-row.child,
+.outline li.child {
+  margin-left: 22px;
+}
+
+.outline-pick {
+  font: inherit;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.outline-pick .symbol-icon {
+  width: 26px;
+  height: 14px;
+}
+
+.outline .swatch {
+  width: 26px;
+  padding: 1px 0;
+  font-size: 0.65rem;
+}
+
+.property-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+}
+
+.property-grid th,
+.property-grid td {
+  border-bottom: 1px solid var(--border);
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.property-grid th[scope="row"] {
+  font-weight: normal;
+  color: var(--muted);
+  width: 42%;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+.property-grid .category th {
+  background: var(--bg);
+  padding: 0;
+}
+
+.property-grid .category button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.78rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 4px 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.property-grid select,
+.property-grid textarea {
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  padding: 2px 0;
+}
+
+.property-grid select:hover,
+.property-grid select:focus,
+.property-grid textarea:focus {
+  border-color: var(--border);
+}
+
+.property-grid textarea {
+  font-size: 0.9rem;
+  padding: 2px 4px;
+}
+
+.property-grid .number {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.property-grid .number small {
+  color: var(--muted);
+}
+
+.property-grid input[type="number"] {
+  width: 70px;
+  padding: 1px 4px;
+}
+
+.property-grid input[type="color"] {
+  width: 40px;
+  height: 20px;
+}
+
+.property-grid .readonly {
+  color: var(--muted);
+}
+
+.property-grid .note td {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.property-grid .note td.warn {
+  color: var(--warn);
+}
+
+/* Dropdowns and checkboxes with pictures, for the property grid. */
+
+.icon-select {
+  position: relative;
+}
+
+.icon-select > button,
+.icon-select li button {
+  font: inherit;
+  font-size: 0.85rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.icon-select > button:hover,
+.icon-select > button[aria-expanded="true"] {
+  border-color: var(--border);
+}
+
+.icon-select .caret {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.icon-select ul {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  min-width: 170px;
+  max-height: 300px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+
+.icon-select li button:hover {
+  background: var(--bg);
+}
+
+.icon-select li button[aria-selected="true"] {
+  background: var(--pressed);
+  color: var(--accent);
+}
+
+.option-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 22px;
+}
+
+.option-icon .symbol-icon {
+  width: 100%;
+  height: 100%;
+}
+
+.option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.icon-check:has(input:not(:checked)) .option-icon {
+  opacity: 0.6;
 }
