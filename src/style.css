@@ -441,10 +441,15 @@ input[type="number"] {
   text-align: right;
 }
 
-.clone-original td {
-  padding: 6px 8px;
-  color: var(--muted);
+.clone-original th,
+.clone-original input,
+.clone-original select {
   font-style: italic;
+}
+
+.clone-original td,
+.clone-original th {
+  border-bottom: 2px solid var(--border);
 }
 
 .clone-grid input,

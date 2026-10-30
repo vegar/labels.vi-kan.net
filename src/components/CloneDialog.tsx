@@ -8,19 +8,23 @@ import { SymbolIcon, TextIcon } from "./Icons";
 interface Props {
   source: LabelState;
   wasm?: ManifoldToplevel;
-  onClone: (rows: Segment[][]) => void;
+  /** The original's segments, which can be edited too, and one entry per copy. */
+  onClone: (original: Segment[], copies: Segment[][]) => void;
   onClose: () => void;
 }
 
 /**
  * Make many copies of a label at once, edited like a spreadsheet: one row
- * per copy, one column per text and per symbol choice.
+ * per copy, one column per text and per symbol choice. The first row is the
+ * original, which can be edited along with its copies.
  */
 export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const table = useRef<HTMLTableElement>(null);
   const columns = useMemo(() => cloneColumns(source.segments), [source.segments]);
-  const [rows, setRows] = useState<Segment[][]>([source.segments]);
+  /** The original, then the copies. */
+  const [rows, setRows] = useState<Segment[][]>([source.segments, source.segments]);
+  const copies = rows.length - 1;
   /** The cell to focus after the next render, e.g. in a row just added. */
   const [focus, setFocus] = useState<[number, number]>();
 
@@ -37,8 +41,8 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
   }, [focus]);
 
   const submit = () => {
-    if (!rows.length) return;
-    onClone(rows);
+    if (!copies) return;
+    onClone(rows[0], rows.slice(1));
     onClose();
   };
 
@@ -56,7 +60,7 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
 
   const cellProps = (r: number, c: number) => ({
     "data-cell": `${r}:${c}`,
-    "aria-label": `${columns[c].title}, row ${r + 1}`,
+    "aria-label": `${columns[c].title}, ${r ? `copy ${r}` : "original"}`,
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -79,7 +83,11 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
   });
 
   const icon = (seg: Segment) =>
-    isText(seg) ? <TextIcon /> : wasm && <SymbolIcon wasm={wasm} symbol={{ ...seg, view: seg.kind === "screw" ? "drive" : seg.view }} />;
+    isText(seg) ? (
+      <TextIcon />
+    ) : (
+      wasm && <SymbolIcon wasm={wasm} symbol={{ ...seg, view: seg.kind === "screw" ? "drive" : seg.view }} />
+    );
 
   return (
     <dialog ref={dialog} className="clone-dialog" onClose={onClose}>
@@ -107,20 +115,20 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
                   ))}
                   <th aria-label="Remove" />
                 </tr>
-                <tr className="clone-original" title="The label being cloned">
-                  <th scope="row">Original</th>
-                  {columns.map((col, c) => (
-                    <td key={c}>{displayValue(source.segments, col)}</td>
-                  ))}
-                  <td />
-                </tr>
               </thead>
               <tbody>
                 {rows.map((row, r) => (
-                  <tr key={r}>
-                    <th scope="row">{r + 1}</th>
+                  <tr
+                    key={r}
+                    className={r ? undefined : "clone-original"}
+                    title={r ? undefined : "The label being cloned"}
+                  >
+                    <th scope="row">{r || "Original"}</th>
                     {columns.map((col, c) => (
-                      <td key={c} className={cellValue(row, col) !== cellValue(source.segments, col) ? "changed" : undefined}>
+                      <td
+                        key={c}
+                        className={cellValue(row, col) !== cellValue(source.segments, col) ? "changed" : undefined}
+                      >
                         {col.options ? (
                           <select
                             {...cellProps(r, c)}
@@ -136,7 +144,7 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
                         ) : (
                           <input
                             {...cellProps(r, c)}
-                            autoFocus={r === 0 && c === 0}
+                            autoFocus={r === 1 && c === 0}
                             type={col.field === "length" ? "number" : "text"}
                             min={col.field === "length" ? 1 : undefined}
                             max={col.field === "length" ? 200 : undefined}
@@ -148,16 +156,18 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
                       </td>
                     ))}
                     <td>
-                      <button
-                        type="button"
-                        className="clone-remove"
-                        title="Remove this row"
-                        aria-label={`Remove row ${r + 1}`}
-                        disabled={rows.length === 1}
-                        onClick={() => removeRow(r)}
-                      >
-                        ×
-                      </button>
+                      {r > 0 && (
+                        <button
+                          type="button"
+                          className="clone-remove"
+                          title="Remove this copy"
+                          aria-label={`Remove copy ${r}`}
+                          disabled={copies === 1}
+                          onClick={() => removeRow(r)}
+                        >
+                          ×
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -172,27 +182,19 @@ export function CloneDialog({ source, wasm, onClone, onClose }: Props) {
             + Add row
           </button>
           <span className="hint">
-            Enter adds a row. Paste rows from a spreadsheet. Use | for a line break. Size, style and colours stay the
-            same.
+            Enter adds a row. Paste rows from a spreadsheet. Use | for a line break. Edits to the original row change
+            the original label. Size, style and colours stay the same.
           </span>
         </div>
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="primary" disabled={!rows.length}>
-            {rows.length > 1 ? `Add ${rows.length} labels` : "Add label"}
+          <button type="submit" className="primary" disabled={!copies}>
+            {copies > 1 ? `Add ${copies} labels` : "Add label"}
           </button>
         </div>
       </form>
     </dialog>
   );
-}
-
-/** A cell as shown in the read-only "Original" row. */
-function displayValue(segments: Segment[], column: CloneColumn): string {
-  const value = cellValue(segments, column);
-  if (column.options) return column.options.find((o) => o.value === value)?.label ?? value;
-  if (column.field === "length") return `${value} mm`;
-  return value.replace(/\|/g, " | ");
 }

@@ -34,7 +34,9 @@ export function cloneColumns(segments: Segment[]): CloneColumn[] {
   return segments.flatMap((seg, segment): CloneColumn[] => {
     const n = (seen.get(seg.kind) ?? 0) + 1;
     seen.set(seg.kind, n);
-    const name = (isText(seg) ? "Text" : symbolInfo(seg.kind).name.replace(/ \(.*\)$/, "")) + (counts.get(seg.kind)! > 1 ? ` ${n}` : "");
+    const name =
+      (isText(seg) ? "Text" : symbolInfo(seg.kind).name.replace(/ \(.*\)$/, "")) +
+      (counts.get(seg.kind)! > 1 ? ` ${n}` : "");
     if (isText(seg)) return [{ segment, field: "text", title: name }];
 
     const info = symbolInfo(seg.kind);
@@ -111,7 +113,13 @@ export function withCell(segments: Segment[], column: CloneColumn, value: string
  * from cell (`row`, `col`) down and to the right. Rows are added as needed,
  * each starting as a copy of the last row; columns past the edge are dropped.
  */
-export function pasteCells(rows: Segment[][], columns: CloneColumn[], row: number, col: number, text: string): Segment[][] {
+export function pasteCells(
+  rows: Segment[][],
+  columns: CloneColumn[],
+  row: number,
+  col: number,
+  text: string,
+): Segment[][] {
   const lines = text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
   const next = [...rows];
   lines.forEach((line, i) => {
