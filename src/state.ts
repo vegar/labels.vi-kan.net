@@ -176,41 +176,14 @@ export function blankLabel(template: LabelState): LabelState {
 }
 
 /**
- * Texts typed into the clone dialog: one label per line, with "|" starting a
- * new line on the label. Blank lines are skipped.
+ * Copies of label `id`, one per entry of `rows`, with that entry's segments,
+ * inserted after it. Everything else is kept. Selects the first copy.
  */
-export function parseCloneTexts(input: string): string[] {
-  return input
-    .split("\n")
-    .map((line) =>
-      line
-        .split("|")
-        .map((part) => part.trim())
-        .join("\n")
-        .trim(),
-    )
-    .filter(Boolean);
-}
-
-/**
- * The segments with the first text replaced by `text`. A label with symbols
- * only gets the text added at the end.
- */
-export function withText(segments: Segment[], text: string): Segment[] {
-  const at = segments.findIndex(isText);
-  if (at < 0) return [...segments, textSegment(text)];
-  return segments.map((s, i) => (i === at ? { ...s, text } : s));
-}
-
-/**
- * Copies of label `id` with each of `texts`, inserted after it. Everything but
- * the first text is kept. Selects the first copy.
- */
-export function cloneLabel(session: Session, id: string, texts: string[]): Session {
+export function cloneLabel(session: Session, id: string, rows: Segment[][]): Session {
   const at = session.labels.findIndex((l) => l.id === id);
-  if (at < 0 || !texts.length) return session;
+  if (at < 0 || !rows.length) return session;
   const source = session.labels[at];
-  const copies = texts.map((text) => ({ ...source, id: newId(), segments: withText(source.segments, text) }));
+  const copies = rows.map((segments) => ({ ...source, id: newId(), segments }));
   const labels = [...session.labels.slice(0, at + 1), ...copies, ...session.labels.slice(at + 1)];
   return { labels, selected: copies[0].id };
 }

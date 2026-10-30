@@ -17,7 +17,16 @@ import {
   segmentSummary,
 } from "../components/segmentOps";
 import { isText, type Segment, type Weight } from "../label";
-import { addLabel, blankLabel, cloneLabel, labelTitle, removeLabel, segmentColor, type LabelState } from "../state";
+import {
+  addLabel,
+  blankLabel,
+  cloneLabel,
+  labelTitle,
+  removeLabel,
+  segmentColor,
+  updateLabel,
+  type LabelState,
+} from "../state";
 import {
   DRIVES,
   SYMBOLS,
@@ -79,7 +88,7 @@ export function Sidebar(props: SidebarProps) {
                     <span className="label-title">{labelTitle(label)}</span>
                   </button>
                   <div className="row-actions">
-                    <button type="button" title="Clone with new texts" onClick={() => setCloning(label)}>
+                    <button type="button" title="Clone into a table of copies" onClick={() => setCloning(label)}>
                       ⧉
                     </button>
                     <button
@@ -163,7 +172,10 @@ export function Sidebar(props: SidebarProps) {
       {cloning && (
         <CloneDialog
           source={cloning}
-          onClone={(texts) => setSession((s) => cloneLabel(s, cloning.id, texts))}
+          wasm={engine?.wasm}
+          onClone={(original, copies) =>
+            setSession((s) => cloneLabel(updateLabel(s, cloning.id, { segments: original }), cloning.id, copies))
+          }
           onClose={() => setCloning(undefined)}
         />
       )}

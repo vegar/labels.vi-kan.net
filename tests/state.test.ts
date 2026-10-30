@@ -6,7 +6,6 @@ import {
   DEFAULT_STATE,
   fileName,
   labelTitle,
-  parseCloneTexts,
   parseSession,
   removeLabel,
   segmentColor,
@@ -129,30 +128,23 @@ describe("label list", () => {
     expect(next.labels[1]).toMatchObject({ units: 3, style: "raised", baseColor: "#ff0000", segments: [text("")] });
   });
 
-  it("clones a label once per text, replacing only its first text", () => {
+  it("clones a label once per row of segments, keeping everything else", () => {
     const segments = [nut, text("M3 × 12"), text("DIN 912")];
     const s = updateLabel(session("a", "b"), "a", { units: 3, style: "raised", baseColor: "#ff0000", segments });
-    const next = cloneLabel(s, "a", ["M3 × 16", "M3 × 20"]);
+    const next = cloneLabel(s, "a", [
+      [nut, text("M3 × 16"), text("DIN 912")],
+      [nut, text("M3 × 20"), text("ISO 7380")],
+    ]);
     expect(next.labels.map(texts)).toEqual([
       ["M3 × 12", "DIN 912"],
       ["M3 × 16", "DIN 912"],
-      ["M3 × 20", "DIN 912"],
+      ["M3 × 20", "ISO 7380"],
       texts(label("b")),
     ]);
-    expect(next.labels[1].segments[0]).toEqual(nut);
     expect(next.labels[2]).toMatchObject({ units: 3, style: "raised", baseColor: "#ff0000" });
     expect(new Set(next.labels.map((l) => l.id)).size).toBe(4);
     expect(next.selected).toBe(next.labels[1].id);
     expect(cloneLabel(s, "a", [])).toBe(s);
-  });
-
-  it("adds the text to a clone of a label with symbols only", () => {
-    const s = updateLabel(session("a"), "a", { segments: [nut] });
-    expect(cloneLabel(s, "a", ["M4"]).labels[1].segments).toEqual([nut, text("M4")]);
-  });
-
-  it("reads one label per line, with | for a line break", () => {
-    expect(parseCloneTexts("M3 × 16\n\n  M4 | Socket head \n")).toEqual(["M3 × 16", "M4\nSocket head"]);
   });
 
   it("removes a label and selects its neighbour", () => {
