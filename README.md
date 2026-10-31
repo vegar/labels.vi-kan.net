@@ -68,7 +68,14 @@ and export code in `src/` (`bases.ts`, `cullenect.ts`, `pred.ts`, `symbols.ts`, 
 
 `.github/workflows/ci.yml` tests and builds every push and pull request, and deploys `main`
 to GitHub Pages. To turn deployment on, set **Settings → Pages → Source** to **GitHub Actions**.
-For the `labels.vi-kan.net` domain, add it under **Settings → Pages → Custom domain**.
+The site is served at <https://labels.vi-kan.net>. The build uses a relative base (`base: "./"`
+in `vite.config.ts`), so the same build works on the custom domain and on the plain Pages path.
+The domain needs:
+
+1. A DNS record `labels.vi-kan.net CNAME vegar.github.io`.
+2. `labels.vi-kan.net` under **Settings → Pages → Custom domain** (with Actions deployment a
+   `CNAME` file in the build is ignored, so the setting is the source of truth).
+3. **Enforce HTTPS** ticked once GitHub has issued the certificate.
 
 ## Roadmap
 
