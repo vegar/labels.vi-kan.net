@@ -69,6 +69,17 @@ export function Select<T extends string | number>({
   );
 }
 
+/** Parses what the user typed, accepting a decimal comma. NaN when it isn't a number yet. */
+export function parseNumber(text: string): number {
+  const t = text.trim().replace(",", ".");
+  return t === "" || t === "-" || t === "." ? NaN : Number(t);
+}
+
+/**
+ * A number field with - and + buttons. While the field has focus it edits its own text, so it can be
+ * emptied and retyped (a controlled number input snaps back to the old value when cleared). Values in
+ * range apply as you type; the text is clamped and tidied when the field loses focus or on Enter.
+ */
 export function NumberInput({
   value,
   min,
@@ -84,19 +95,54 @@ export function NumberInput({
   unit?: string;
   onChange: (value: number) => void;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = +value.toFixed(2);
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  const decimals = (String(step).split(".")[1] ?? "").length;
+  const nudge = (dir: 1 | -1) => {
+    // Snap to the step grid so 2.37 + 0.1 gives 2.4, not 2.47.
+    const n = Math.round((Math.round(value / step) + dir) * step * 10 ** decimals) / 10 ** decimals;
+    onChange(clamp(n));
+  };
+  const commit = () => {
+    if (draft === null) return;
+    const n = parseNumber(draft);
+    if (Number.isFinite(n) && clamp(n) !== value) onChange(clamp(n));
+    setDraft(null);
+  };
+
   return (
     <span className="number">
+      <button type="button" className="step" aria-label="Decrease" disabled={value <= min} onClick={() => nudge(-1)}>
+        −
+      </button>
       <input
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={+value.toFixed(2)}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        value={draft ?? String(shown)}
+        onFocus={(e) => {
+          setDraft(String(shown));
+          e.target.select();
+        }}
         onChange={(e) => {
-          const n = Number(e.target.value);
-          if (e.target.value !== "" && Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+          setDraft(e.target.value);
+          const n = parseNumber(e.target.value);
+          if (Number.isFinite(n) && n >= min && n <= max) onChange(n);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            nudge(e.key === "ArrowUp" ? 1 : -1);
+            setDraft(null);
+          }
         }}
       />
+      <button type="button" className="step" aria-label="Increase" disabled={value >= max} onClick={() => nudge(1)}>
+        +
+      </button>
       <small>{unit}</small>
     </span>
   );
