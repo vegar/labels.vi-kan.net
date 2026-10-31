@@ -25,6 +25,33 @@ export interface Printer {
   bed: Bed;
   /** Where the slicer puts the purge tower by default, its front-left corner, and its width. */
   tower?: { x: number; y: number; width: number };
+  /** Bambu Studio's system presets for this printer, to name in a project file. */
+  bambu?: BambuPresets;
+}
+
+/** The names of Bambu Studio system presets: the printer with a 0.4 mm nozzle, its 0.20mm Standard process, and PLA Basic. */
+export interface BambuPresets {
+  model: string;
+  printer: string;
+  process: string;
+  filament: string;
+  /** Printers with two nozzles name both in their settings. */
+  nozzles: 1 | 2;
+}
+
+/** Presets named the usual way: "Bambu Lab <model> 0.4 nozzle", "0.20mm Standard @BBL <code>", "Bambu PLA Basic @BBL <code>". */
+function bambu(
+  model: string,
+  code: string,
+  opts: { filament?: string; process?: string; nozzles?: 1 | 2 } = {},
+): BambuPresets {
+  return {
+    model: `Bambu Lab ${model}`,
+    printer: `Bambu Lab ${model} 0.4 nozzle`,
+    process: `0.20mm Standard @BBL ${opts.process ?? code}`,
+    filament: `Bambu PLA Basic @BBL ${opts.filament ?? code}`,
+    nozzles: opts.nozzles ?? 1,
+  };
 }
 
 /**
@@ -35,7 +62,7 @@ const TOWER = { x: 165, y: 250, width: 35 };
 const WIDE_TOWER = { ...TOWER, width: 60 };
 const I3_TOWER = { ...TOWER, x: 0 };
 /** Room for the purge tower's brim. */
-const TOWER_BRIM = 3;
+export const TOWER_BRIM = 3;
 
 /** The corner by the purge chute on P1 and X1 printers. */
 const PURGE_CORNER: Area = { x: 0, y: 0, width: 18, depth: 28 };
@@ -45,20 +72,48 @@ function oneNozzleStrip(x: number, width: number, depth: number): Area {
   return { x, y: 0, width, depth };
 }
 
+const H2D_BED: Bed = {
+  width: 350,
+  depth: 320,
+  exclude: [oneNozzleStrip(0, 25, 320), oneNozzleStrip(325, 25, 320)],
+};
+
 /**
  * Printers to pick from. Print areas and keep-clear zones are from the
  * printer profiles that come with Bambu Studio and OrcaSlicer.
  */
 export const PRINTERS: Printer[] = [
-  { id: "bbl-a1mini", vendor: "Bambu Lab", name: "A1 mini", bed: { width: 180, depth: 180 }, tower: I3_TOWER },
-  { id: "bbl-a1", vendor: "Bambu Lab", name: "A1", bed: { width: 256, depth: 256 }, tower: I3_TOWER },
-  { id: "bbl-a2l", vendor: "Bambu Lab", name: "A2L", bed: { width: 330, depth: 320 }, tower: I3_TOWER },
+  {
+    id: "bbl-a1mini",
+    vendor: "Bambu Lab",
+    name: "A1 mini",
+    bed: { width: 180, depth: 180 },
+    tower: I3_TOWER,
+    bambu: bambu("A1 mini", "A1M"),
+  },
+  {
+    id: "bbl-a1",
+    vendor: "Bambu Lab",
+    name: "A1",
+    bed: { width: 256, depth: 256 },
+    tower: I3_TOWER,
+    bambu: bambu("A1", "A1"),
+  },
+  {
+    id: "bbl-a2l",
+    vendor: "Bambu Lab",
+    name: "A2L",
+    bed: { width: 330, depth: 320 },
+    tower: I3_TOWER,
+    bambu: bambu("A2L", "A2L", { filament: "A2L 0.4 nozzle" }),
+  },
   {
     id: "bbl-p1p",
     vendor: "Bambu Lab",
     name: "P1P",
     bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
     tower: TOWER,
+    bambu: bambu("P1P", "P1P"),
   },
   {
     id: "bbl-p1s",
@@ -66,14 +121,23 @@ export const PRINTERS: Printer[] = [
     name: "P1S",
     bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
     tower: TOWER,
+    bambu: bambu("P1S", "X1C", { filament: "P1S 0.4 nozzle" }),
   },
-  { id: "bbl-p2s", vendor: "Bambu Lab", name: "P2S", bed: { width: 256, depth: 256 }, tower: TOWER },
+  {
+    id: "bbl-p2s",
+    vendor: "Bambu Lab",
+    name: "P2S",
+    bed: { width: 256, depth: 256 },
+    tower: TOWER,
+    bambu: bambu("P2S", "P2S"),
+  },
   {
     id: "bbl-x1c",
     vendor: "Bambu Lab",
     name: "X1 Carbon",
     bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
     tower: TOWER,
+    bambu: bambu("X1 Carbon", "X1C"),
   },
   {
     id: "bbl-x1e",
@@ -81,6 +145,7 @@ export const PRINTERS: Printer[] = [
     name: "X1E",
     bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
     tower: TOWER,
+    bambu: bambu("X1E", "X1C"),
   },
   {
     id: "bbl-x2d",
@@ -88,21 +153,39 @@ export const PRINTERS: Printer[] = [
     name: "X2D",
     bed: { width: 256, depth: 256, exclude: [oneNozzleStrip(0, 20.5, 256)] },
     tower: TOWER,
+    bambu: bambu("X2D", "X2D", { filament: "X2D 0.4 nozzle", nozzles: 2 }),
   },
-  { id: "bbl-h2s", vendor: "Bambu Lab", name: "H2S", bed: { width: 340, depth: 320 }, tower: WIDE_TOWER },
+  {
+    id: "bbl-h2s",
+    vendor: "Bambu Lab",
+    name: "H2S",
+    bed: { width: 340, depth: 320 },
+    tower: WIDE_TOWER,
+    bambu: bambu("H2S", "H2S"),
+  },
   {
     id: "bbl-h2c",
     vendor: "Bambu Lab",
     name: "H2C",
     bed: { width: 330, depth: 320, exclude: [oneNozzleStrip(0, 25, 320), oneNozzleStrip(325, 5, 320)] },
     tower: WIDE_TOWER,
+    bambu: bambu("H2C", "H2C", { nozzles: 2 }),
   },
   {
     id: "bbl-h2d",
     vendor: "Bambu Lab",
-    name: "H2D / H2D Pro",
-    bed: { width: 350, depth: 320, exclude: [oneNozzleStrip(0, 25, 320), oneNozzleStrip(325, 25, 320)] },
+    name: "H2D",
+    bed: H2D_BED,
     tower: WIDE_TOWER,
+    bambu: bambu("H2D", "H2D", { nozzles: 2 }),
+  },
+  {
+    id: "bbl-h2dp",
+    vendor: "Bambu Lab",
+    name: "H2D Pro",
+    bed: H2D_BED,
+    tower: WIDE_TOWER,
+    bambu: bambu("H2D Pro", "H2DP", { nozzles: 2 }),
   },
   { id: "prusa-mini", vendor: "Prusa", name: "MINI+", bed: { width: 180, depth: 180 } },
   { id: "prusa-mk4", vendor: "Prusa", name: "MK4S / MK4", bed: { width: 250, depth: 210 } },
@@ -127,6 +210,10 @@ export interface PrinterChoice {
   id: string;
   /** Used when `id` is CUSTOM_PRINTER. */
   custom: Bed;
+}
+
+export function bambuPresets(choice: PrinterChoice): BambuPresets | undefined {
+  return PRINTERS.find((p) => p.id === choice.id)?.bambu;
 }
 
 export function printerName(choice: PrinterChoice): string {

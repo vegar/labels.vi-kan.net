@@ -39,10 +39,12 @@ interface Props {
   plates: number;
   /** Labels larger than the plate. */
   tooLarge: number;
+  /** The download is a Bambu Studio project, with all plates in one file. */
+  project: boolean;
 }
 
 /** Pick the printer, or type in a bed size, and see how many plates the labels take. */
-export function PrinterPicker({ choice, onChange, plates, tooLarge }: Props) {
+export function PrinterPicker({ choice, onChange, plates, tooLarge, project }: Props) {
   return (
     <div className="printer">
       <label>
@@ -84,7 +86,9 @@ export function PrinterPicker({ choice, onChange, plates, tooLarge }: Props) {
           ? `${tooLarge === 1 ? "One label is" : `${tooLarge} labels are`} larger than the plate.`
           : plates === 1
             ? "Fits on one plate."
-            : `Needs ${plates} plates. Download 3MF gives a zip with one 3MF per plate.`}
+            : project
+              ? `Needs ${plates} plates, all in one Bambu Studio project.`
+              : `Needs ${plates} plates. Download 3MF gives a zip with one 3MF per plate.`}
       </small>
     </div>
   );

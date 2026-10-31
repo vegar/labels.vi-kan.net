@@ -91,7 +91,7 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "More than one plate",
-    text: "Labels that don't fit go on the next plate, and the download becomes a zip with one 3MF per plate. Slicers centre a 3MF that isn't their own project on the plate as a whole, so plates can't share one file. A colour keeps the same filament slot in every file. The files carry no printer settings, so your own presets stay as they are.",
+    text: "Labels that don't fit go on the next plate. For a Bambu Lab printer the download is a Bambu Studio project: every plate in one file, set up with the printer's system presets (0.4 nozzle, 0.20mm Standard, Bambu PLA Basic in each label colour) and the purge tower where the bed view shows it. Other slicers centre a 3MF that isn't their own project on the plate as a whole, so for other printers the download is a zip with one 3MF per plate, with no printer settings; a colour keeps the same filament slot in every file.",
   },
   {
     title: "Printers and plates",

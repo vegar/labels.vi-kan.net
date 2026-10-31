@@ -14,7 +14,7 @@ import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
 import { About } from "./components/About";
 import { PrinterPicker, usePrinter } from "./components/PrinterPicker";
 import { Segmented } from "./components/Segmented";
-import { bedOf, bounds, footprint, packPlates, plateCount, printerName, tooLarge } from "./bed";
+import { bambuPresets, bedOf, bounds, footprint, packPlates, plateCount, printerName, tooLarge } from "./bed";
 import { Sidebar } from "./sidebar/Sidebar";
 
 /** The URL hash, kept in sync so links like #about can switch pages. */
@@ -176,6 +176,7 @@ export function App() {
           setView("bed");
         }}
         plates={plates}
+        project={!!bambuPresets(printer)}
         tooLarge={oversized}
       />
       <button
@@ -184,7 +185,7 @@ export function App() {
         disabled={!canExport}
         onClick={() =>
           withExportObjects((objects) => {
-            const file = export3mf(exportName, objects, bed);
+            const file = export3mf(exportName, objects, bed, bambuPresets(printer));
             download(file.data, file.filename, file.type);
           })
         }

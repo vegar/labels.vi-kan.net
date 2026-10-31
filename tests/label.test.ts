@@ -7,6 +7,7 @@ import { buildByKind } from "./parts";
 import { loadManifold } from "../src/manifold";
 import { DEFAULT_OPTIONS, maxEmbeddedDepth, textSegment } from "../src/label";
 import { export3mf, plateLayout, to3mf, toStl, toStlZip } from "../src/export";
+import { bambuPresets, plateOrigin, TOWER_BRIM } from "../src/bed";
 
 const BED = { width: 256, depth: 256 };
 
@@ -288,6 +289,41 @@ describe("export", () => {
       "1",
       "3",
     ]);
+  });
+
+  it("downloads one Bambu Studio project with every plate for a Bambu printer", () => {
+    const { base, text } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, units: 3 });
+    const labels = Array.from({ length: 7 }, (_, i) => ({
+      name: `l${i}`,
+      parts: [
+        { name: "label", manifold: base, color: "#202020" },
+        { name: "text", manifold: text!, color: "#ffffff" },
+      ],
+    }));
+    const presets = bambuPresets({ id: "bbl-h2s", custom: { width: 0, depth: 0 } })!;
+    // A small bed with a tower zone, so the labels need two plates.
+    const bed = { width: 130, depth: 100, exclude: [{ x: 60, y: 60, width: 40, depth: 40, kind: "tower" as const }] };
+    const layout = plateLayout(labels, bed);
+    expect(new Set(layout.map((l) => l.plate)).size).toBe(2);
+
+    const file = export3mf("labels", labels, bed, presets);
+    expect(file.filename).toBe("labels.3mf");
+    const files = unzipSync(file.data);
+    const model = strFromU8(files["3D/3dmodel.model"]);
+    expect(model).toMatch(/<metadata name="Application">BambuStudio-/);
+    const settings = strFromU8(files["Metadata/model_settings.config"]);
+    expect([...settings.matchAll(/<plate>/g)]).toHaveLength(2);
+    const project = JSON.parse(strFromU8(files["Metadata/project_settings.config"]));
+    expect(project.printer_settings_id).toBe(presets.printer);
+    expect(project.print_settings_id).toBe(presets.process);
+    expect(project.filament_colour).toEqual(["#202020", "#FFFFFF"]);
+    expect(project.wipe_tower_x[0]).toBe(String(60 + TOWER_BRIM));
+
+    // Labels on the second plate sit on that plate, to the right of the first.
+    const [ox] = plateOrigin(1, 2, bed);
+    const xs = [...model.matchAll(/<item [^>]*transform="1 0 0 0 1 0 0 0 1 ([-\d.]+)/g)].map((m) => Number(m[1]));
+    expect(xs).toHaveLength(7);
+    layout.forEach((l, i) => expect(xs[i]).toBeCloseTo(l.offset[0] + (l.plate === 1 ? ox : 0), 3));
   });
 
   it("downloads a single 3MF when the labels fit on one plate", () => {
