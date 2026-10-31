@@ -300,12 +300,21 @@ footer a {
   white-space: nowrap;
 }
 
+/* The sliders wrap together, so on a narrow screen both drop below the
+   view toggle instead of one hanging off on its own. */
+.row-sliders {
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .row-controls label {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 160px;
-  max-width: 100%;
+  flex: 0 1 160px;
+  min-width: 0;
 }
 
 .row-controls output {

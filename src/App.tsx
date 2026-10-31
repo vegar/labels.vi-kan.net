@@ -250,34 +250,36 @@ export function App() {
               ]}
               onChange={setView}
             />
-            <label>
-              <span>
-                Lift selected <output>{layout.lift.toFixed(1)} mm</output>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={20}
-                step={0.5}
-                value={layout.lift}
-                onChange={(e) => setLayout((l) => ({ ...l, lift: Number(e.target.value) }))}
-              />
-            </label>
-            {view === "row" && (
+            <div className="row-sliders">
               <label>
                 <span>
-                  Spread others <output>{layout.spread.toFixed(1)} mm</output>
+                  Lift selected <output>{layout.lift.toFixed(1)} mm</output>
                 </span>
                 <input
                   type="range"
                   min={0}
-                  max={40}
+                  max={20}
                   step={0.5}
-                  value={layout.spread}
-                  onChange={(e) => setLayout((l) => ({ ...l, spread: Number(e.target.value) }))}
+                  value={layout.lift}
+                  onChange={(e) => setLayout((l) => ({ ...l, lift: Number(e.target.value) }))}
                 />
               </label>
-            )}
+              {view === "row" && (
+                <label>
+                  <span>
+                    Spread others <output>{layout.spread.toFixed(1)} mm</output>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={40}
+                    step={0.5}
+                    value={layout.spread}
+                    onChange={(e) => setLayout((l) => ({ ...l, spread: Number(e.target.value) }))}
+                  />
+                </label>
+              )}
+            </div>
           </div>
           <div>
             {view === "bed" && `${plates === 1 ? "1 plate" : `${plates} plates`} on ${printerName(printer)} · `}
