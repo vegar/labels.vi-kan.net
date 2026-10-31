@@ -5,18 +5,41 @@ interface Feature {
   text: ReactNode;
 }
 
+interface Figure {
+  /** File name in public/features/. */
+  src: string;
+  alt: string;
+  caption: ReactNode;
+  /** Pixel width of the image at 1×, so it isn't blown up past its sharp size. */
+  width?: number;
+  /** Spans the whole page width below the group's text, for screenshots with small print. */
+  wide?: boolean;
+}
+
 interface Group {
   id: string;
   title: string;
   intro?: ReactNode;
   features: Feature[];
+  figures?: Figure[];
 }
+
+/** Screenshots live in public/, next to the built page, so they work under any base path. */
+const image = (src: string) => `${import.meta.env.BASE_URL}features/${src}`;
 
 const GROUPS: Group[] = [
   {
     id: "holders",
     title: "Label holders",
-    intro: "Pick the holder under Properties when the label itself is selected in the outline.",
+    intro:
+      "Pick the holder under Properties when the label itself is selected in the outline.",
+    figures: [
+      {
+        src: "holders.webp",
+        alt: "A 2U Cullenect label, a legacy Cullenect label and a 2U pred label with tabs and holes at each end",
+        caption: "From the back: Cullenect 2U, Cullenect legacy and pred 2U.",
+      },
+    ],
     features: [
       {
         title: "Cullenect",
@@ -39,7 +62,28 @@ const GROUPS: Group[] = [
   {
     id: "segments",
     title: "Text and symbols",
-    intro: "A label is a row of segments. Each segment is either text or a symbol, in any order.",
+    intro:
+      "A label is a row of segments. Each segment is either text or a symbol, in any order.",
+    figures: [
+      {
+        src: "segments.webp",
+        alt: "A label with a socket screw, a large bold M5, smaller two-line text, and a washer at the far right",
+        caption:
+          "Four segments: a screw, bold “M5”, smaller two-line text set to Grow and aligned left, and a washer pushed to the end.",
+      },
+      {
+        src: "segments-outline.webp",
+        alt: "The outline listing the label's four segments",
+        caption: "The same label in the outline, one line per segment.",
+        width: 339,
+      },
+      {
+        src: "palette.webp",
+        alt: "The add segment palette: text, screw, bolt, nut, washer, lock washer and threaded insert",
+        caption: "“+ Add segment” opens the palette.",
+        width: 309,
+      },
+    ],
     features: [
       {
         title: "Add, move and remove",
@@ -70,7 +114,22 @@ const GROUPS: Group[] = [
   {
     id: "symbols",
     title: "Fastener symbols",
-    intro: "Every option shows a small drawing of the symbol with that option applied.",
+    intro:
+      "Every option shows a small drawing of the symbol with that option applied.",
+    figures: [
+      {
+        src: "symbols.webp",
+        alt: "Four labels showing every kind of fastener symbol",
+        caption:
+          "From the back: a Cullenect-style screw, a self-tapping screw seen from the side and a Torx drive on its own; two bolts drawn to length; hex, lock, square and T-nuts; a washer, lock washer, threaded insert and hex head bolt.",
+      },
+      {
+        src: "screw-options.webp",
+        alt: "The screw's properties with the drive list open, each drive drawn next to its name",
+        caption: "Every choice is drawn, so you can see it before you pick it.",
+        width: 341,
+      },
+    ],
     features: [
       {
         title: "Screw",
@@ -97,6 +156,20 @@ const GROUPS: Group[] = [
   {
     id: "print",
     title: "Print style and colours",
+    figures: [
+      {
+        src: "colours.webp",
+        alt: "A dark label with a red screw, white text and the size in yellow",
+        caption:
+          "One label, four colours: the screw and the size each have their own colour.",
+      },
+      {
+        src: "colour-props.webp",
+        alt: "The segment properties with Own colour ticked and set to red",
+        caption: "Tick Own colour and pick one.",
+        width: 339,
+      },
+    ],
     features: [
       {
         title: "Flush or raised",
@@ -119,6 +192,22 @@ const GROUPS: Group[] = [
   {
     id: "labels",
     title: "Many labels",
+    figures: [
+      {
+        src: "clone-dialog.webp",
+        alt: "The clone dialog: a table with columns for screw head, screw drive and text, the original in the first row and four copies below",
+        caption:
+          "Cloning “M3 × 12”: change the head, drive and text per row. Changed cells are tinted.",
+        width: 860,
+        wide: true,
+      },
+      {
+        src: "clone-result.webp",
+        alt: "The outline with the four new labels inserted after the original",
+        caption: "The copies are added right after the original.",
+        width: 339,
+      },
+    ],
     features: [
       {
         title: "Outline",
@@ -128,10 +217,12 @@ const GROUPS: Group[] = [
         title: "Clone into a table of copies",
         text: (
           <>
-            The ⧉ button on a label opens a spreadsheet: one row per copy, one column per text and per main symbol
-            choice (head, drive, length, nut type). Enter adds a row, rows can be pasted from a spreadsheet, and | makes
-            a line break. The first row is the original, which can be edited too. Everything else is copied, so a whole
-            set of M2 to M6 labels takes a minute.
+            The ⧉ button on a label opens a spreadsheet: one row per copy, one
+            column per text and per main symbol choice (head, drive, length, nut
+            type). Enter adds a row, rows can be pasted from a spreadsheet, and
+            | makes a line break. The first row is the original, which can be
+            edited too. Everything else is copied, so a whole set of M2 to M6
+            labels takes a minute.
           </>
         ),
       },
@@ -148,6 +239,14 @@ const GROUPS: Group[] = [
   {
     id: "preview",
     title: "3D preview",
+    figures: [
+      {
+        src: "preview.webp",
+        alt: "Six labels in the 3D view, with the third one lifted above the others, and the lift and spread sliders below",
+        caption: "The selected label (M3 × 16) is lifted out of the row.",
+        width: 469,
+      },
+    ],
     features: [
       {
         title: "All labels at once",
@@ -174,6 +273,25 @@ const GROUPS: Group[] = [
   {
     id: "export",
     title: "Printer and export",
+    figures: [
+      {
+        src: "print-bed.webp",
+        alt: "24 labels laid out in rows on a Bambu Lab H2S plate, with the purge tower drawn at the back",
+        caption: "24 labels on a Bambu Lab H2S, kept clear of the purge tower.",
+      },
+      {
+        src: "print-bed-p1s.webp",
+        alt: "70 labels on two Bambu Lab P1S plates; the purge corner at the front left is hatched",
+        caption:
+          "70 labels need two plates on a P1S. The hatched corner is kept clear for purging.",
+      },
+      {
+        src: "export.webp",
+        alt: "The printer picker set to Bambu Lab H2S, with Download 3MF (24 labels) and STL (zip) buttons",
+        caption: "The printer picker sits above the downloads.",
+        width: 379,
+      },
+    ],
     features: [
       {
         title: "Printer picker",
@@ -209,6 +327,20 @@ const GROUPS: Group[] = [
   },
 ];
 
+function figure(f: Figure) {
+  return (
+    <figure key={f.src}>
+      <img
+        src={image(f.src)}
+        alt={f.alt}
+        loading="lazy"
+        style={f.width ? { maxWidth: f.width } : undefined}
+      />
+      <figcaption>{f.caption}</figcaption>
+    </figure>
+  );
+}
+
 /** Every feature of the app, grouped by where it is found. */
 export function Features() {
   return (
@@ -219,8 +351,9 @@ export function Features() {
         </a>
         <h1>Features</h1>
         <p>
-          Everything the label maker can do, grouped by where you find it. For credits and the reasons behind some
-          choices, see <a href="#about">About</a>.
+          Everything the label maker can do, grouped by where you find it. For
+          credits and the reasons behind some choices, see{" "}
+          <a href="#about">About</a>.
         </p>
 
         <nav className="feature-toc" aria-label="Contents">
@@ -230,7 +363,9 @@ export function Features() {
               href="#features"
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById(`features-${g.id}`)?.scrollIntoView({ behavior: "smooth" });
+                document
+                  .getElementById(`features-${g.id}`)
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
             >
               {g.title}
@@ -238,9 +373,24 @@ export function Features() {
           ))}
         </nav>
 
-        <div className="feature-groups">
-          {GROUPS.map((g) => (
-            <section key={g.id} id={`features-${g.id}`}>
+        <figure className="feature-hero">
+          <img
+            src={image("app.webp")}
+            alt="The label maker with six labels: the outline and properties on the left, the labels in 3D on the right"
+          />
+          <figcaption>
+            Labels and their properties on the left, every label in 3D on the
+            right.
+          </figcaption>
+        </figure>
+
+        {GROUPS.map((g) => (
+          <section
+            key={g.id}
+            id={`features-${g.id}`}
+            className={g.figures ? "feature-group" : "feature-group text-only"}
+          >
+            <div className="feature-text">
               <h2>{g.title}</h2>
               {g.intro && <p className="sub">{g.intro}</p>}
               <dl>
@@ -251,12 +401,23 @@ export function Features() {
                   </div>
                 ))}
               </dl>
-            </section>
-          ))}
-        </div>
+            </div>
+            {g.figures?.some((f) => !f.wide) && (
+              <div className="feature-figures">
+                {g.figures.filter((f) => !f.wide).map(figure)}
+              </div>
+            )}
+            {g.figures?.some((f) => f.wide) && (
+              <div className="feature-figures wide">
+                {g.figures.filter((f) => f.wide).map(figure)}
+              </div>
+            )}
+          </section>
+        ))}
 
         <p className="sub">
-          Source code on <a href="https://github.com/vegar/labels.vi-kan.net">GitHub</a>.
+          Source code on{" "}
+          <a href="https://github.com/vegar/labels.vi-kan.net">GitHub</a>.
         </p>
       </article>
     </div>
