@@ -38,7 +38,9 @@ Inspired by [label.alch.shop](https://label.alch.shop), with label geometry from
   makes a blank label that keeps the size, print style and colours of the one you were editing.
   Labels are kept in the browser between visits.
 - Live 3D preview with label, text and symbol colours.
-- **3MF export** of all labels at once, laid out on one plate. Each label is its own object,
+- **Printer bed view**: pick your printer (or type a bed size) and see the labels laid out on its
+  plates, with more plates when they don't all fit.
+- **3MF export** of all labels at once, laid out on your printer's plates. For a Bambu Lab printer the file is a Bambu Studio project with every plate, the printer's system presets and a filament per colour; for other printers it's a zip with one 3MF per plate when they need more than one. Each label is its own object,
   with the label, the text and the symbols as parts, so you can assign a filament to each in
   Bambu Studio, OrcaSlicer or PrusaSlicer; Bambu Studio and OrcaSlicer get one filament slot per
   colour, shared by all labels. STL export as a zip with a folder per label and one file per part.

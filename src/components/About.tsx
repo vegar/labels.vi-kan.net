@@ -87,7 +87,15 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "One 3MF for all labels",
-    text: "Each label is its own object, with the label, text and symbols as separate parts. Labels are laid out back to front with a 5 mm gap, in columns up to 200 mm, centred on the plate.",
+    text: "Each label is its own object, with the label, text and symbols as separate parts. Labels are laid out in rows like lines of text, from the back left, with a 5 mm gap and a 5 mm edge, centred on your printer's plate. A short label fills the gap at the end of an earlier row.",
+  },
+  {
+    title: "More than one plate",
+    text: "Labels that don't fit go on the next plate. For a Bambu Lab printer the download is a Bambu Studio project: every plate in one file, set up with the printer's system presets (0.4 nozzle, 0.20mm Standard, Bambu PLA Basic in each label colour) and the purge tower where the bed view shows it. Other slicers centre a 3MF that isn't their own project on the plate as a whole, so for other printers the download is a zip with one 3MF per plate, with no printer settings; a colour keeps the same filament slot in every file.",
+  },
+  {
+    title: "Printers and plates",
+    text: "Print areas and keep-clear zones (the purge corner on P1 and X1, the strips only one nozzle of an H2D, H2C or X2D reaches) come from the printer profiles in Bambu Studio and OrcaSlicer. Labels are kept clear of those zones. With more than one colour, the purge tower's default spot (Bambu Studio's x 165, y 250, or the left edge on A1 printers) is kept clear too. The plates in the bed view are drawn here rather than taken from the slicers, whose models are AGPL.",
   },
   {
     title: "Colours in Bambu Studio and OrcaSlicer",

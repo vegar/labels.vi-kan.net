@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import type { Manifold } from "manifold-3d";
+import { bounds, footprint, packPlates, plateCount, plateOrigin, TOWER_BRIM, type BambuPresets, type Bed } from "./bed";
 
 export interface ExportPart {
   name: string;
@@ -33,13 +34,6 @@ export interface ExportObject {
   parts: ExportPart[];
 }
 
-/** Gap between labels on the plate, in mm. */
-const PLATE_GAP = 5;
-/** Labels go in columns no taller than this, in mm. */
-const PLATE_COLUMN_HEIGHT = 200;
-/** Where the middle of the layout goes; inside every Bambu Lab plate. */
-const PLATE_CENTER: [number, number] = [128, 128];
-
 /**
  * Filament slot (1-based) for each part: the first part gets slot 1 and every
  * further distinct colour gets the next slot, so same-coloured parts share one,
@@ -56,57 +50,15 @@ function filamentSlots(objects: ExportObject[]): number[][] {
   );
 }
 
-interface Bounds {
-  min: [number, number, number];
-  max: [number, number, number];
-}
-
-function bounds(parts: ExportPart[]): Bounds {
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
-  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-  for (const p of parts) {
-    const b = p.manifold.boundingBox();
-    for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k], b.min[k]);
-      max[k] = Math.max(max[k], b.max[k]);
-    }
-  }
-  return { min, max };
-}
-
 /**
- * Where each object goes on the plate, as a translation. Objects are listed top
- * to bottom (first object at the back) and wrap into a new column to the right
- * when a column gets too tall. The whole layout is centred on the plate.
+ * Which plate each object goes on and where, as a translation on that plate:
+ * packed onto as many plates as the bed needs (see packPlates).
  */
-export function plateLayout(objects: ExportObject[]): [number, number, number][] {
-  const boxes = objects.map((o) => bounds(o.parts));
-  const placed: { x: number; y: number }[] = [];
-  let columnX = 0;
-  let columnWidth = 0;
-  let y = 0;
-  for (const b of boxes) {
-    const w = b.max[0] - b.min[0];
-    const h = b.max[1] - b.min[1];
-    if (y > 0 && y + h > PLATE_COLUMN_HEIGHT) {
-      columnX += columnWidth + PLATE_GAP;
-      columnWidth = 0;
-      y = 0;
-    }
-    // Top-left corner of this object, with y growing towards the front.
-    placed.push({ x: columnX, y });
-    columnWidth = Math.max(columnWidth, w);
-    y += h + PLATE_GAP;
-  }
-  const width = Math.max(0, ...placed.map((p, i) => p.x + boxes[i].max[0] - boxes[i].min[0]));
-  const depth = Math.max(0, ...placed.map((p, i) => p.y + boxes[i].max[1] - boxes[i].min[1]));
-  return placed.map((p, i) => {
+export function plateLayout(objects: ExportObject[], bed: Bed): { plate: number; offset: [number, number, number] }[] {
+  const boxes = objects.map((o) => bounds(o.parts.map((p) => p.manifold)));
+  return packPlates(boxes.map(footprint), bed).map((p, i) => {
     const b = boxes[i];
-    return [
-      PLATE_CENTER[0] - width / 2 + p.x - b.min[0],
-      PLATE_CENTER[1] + depth / 2 - p.y - b.max[1],
-      -b.min[2],
-    ];
+    return { plate: p.plate, offset: [p.x - (b.min[0] + b.max[0]) / 2, p.y - (b.min[1] + b.max[1]) / 2, -b.min[2]] };
   });
 }
 
@@ -116,8 +68,12 @@ export function plateLayout(objects: ExportObject[]): [number, number, number][]
  * part names and filament ("extruder") assignments from it. Object ids are the
  * assembly ids and part ids are the component object ids.
  */
-function bambuModelSettings(objects: ExportObject[], ids: { assembly: number; parts: number[] }[]): string {
-  const slots = filamentSlots(objects);
+function bambuModelSettings(
+  objects: ExportObject[],
+  ids: { assembly: number; parts: number[] }[],
+  slots: number[][],
+  plates: string,
+): string {
   const body = objects
     .map((o, i) => {
       const volumes = o.parts
@@ -137,17 +93,162 @@ ${volumes}
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <config>
-${body}
+${body}${plates ? `\n${plates}` : ""}
 </config>`;
 }
 
 /**
- * Build a core-spec 3MF holding one object per label, laid out on a plate.
+ * Build a core-spec 3MF holding one object per label, laid out on one plate.
  * Each object is made of several parts, each with its own colour, so slicers
  * open it with one part per colour; Bambu Studio and OrcaSlicer also get each
  * colour on its own filament slot, shared across all labels.
  */
-export function to3mf(title: string, objects: ExportObject[]): Uint8Array {
+export function to3mf(title: string, objects: ExportObject[], bed: Bed): Uint8Array {
+  const layout = plateLayout(objects, bed);
+  return model3mf(
+    title,
+    objects,
+    layout.map((l) => l.offset),
+    filamentSlots(objects),
+  );
+}
+
+/** A file to download. */
+export interface Download {
+  filename: string;
+  data: Uint8Array;
+  type: string;
+}
+
+/**
+ * The labels as one 3MF, or, when they need more than one plate and there is
+ * no Bambu printer to write a project for, a zip with a 3MF per plate.
+ * Slicers centre a 3MF that isn't their own project on the plate as a whole,
+ * so plates can only share a file that is a Bambu Studio project. Filament
+ * slots are numbered across all labels, so a colour has the same slot in
+ * every file.
+ */
+export function export3mf(title: string, objects: ExportObject[], bed: Bed, bambu?: BambuPresets): Download {
+  const layout = plateLayout(objects, bed);
+  const slots = filamentSlots(objects);
+  const plates = plateCount(layout);
+  if (bambu) {
+    const offsets = layout.map(({ plate, offset: [x, y, z] }) => {
+      const [ox, oy] = plateOrigin(plate, plates, bed);
+      return [x + ox, y + oy, z] as [number, number, number];
+    });
+    const project = { presets: bambu, bed, plates: layout.map((l) => l.plate), colours: slotColours(objects) };
+    return { filename: `${title}.3mf`, data: model3mf(title, objects, offsets, slots, project), type: "model/3mf" };
+  }
+  const plate = (n: number) => {
+    const on = layout.flatMap((l, i) => (l.plate === n ? [i] : []));
+    return model3mf(
+      plates === 1 ? title : `${title} plate ${n + 1}`,
+      on.map((i) => objects[i]),
+      on.map((i) => layout[i].offset),
+      on.map((i) => slots[i]),
+    );
+  };
+  if (plates === 1) return { filename: `${title}.3mf`, data: plate(0), type: "model/3mf" };
+  const files: Record<string, Uint8Array> = {};
+  for (let n = 0; n < plates; n++) files[`${title}-plate-${n + 1}.3mf`] = plate(n);
+  // 3MFs are zips already; storing them again saves time and gains nothing.
+  return { filename: `${title}-${plates}-plates.zip`, data: zipSync(files, { level: 0 }), type: "application/zip" };
+}
+
+/** The colour of each filament slot, in slot order; see filamentSlots. */
+function slotColours(objects: ExportObject[]): string[] {
+  const colours: string[] = [];
+  for (const p of objects.flatMap((o) => o.parts)) {
+    const c = p.color.toUpperCase();
+    if (!colours.includes(c)) colours.push(c);
+  }
+  return colours;
+}
+
+/** What a Bambu Studio project needs on top of a plain 3MF. */
+interface BambuProject {
+  presets: BambuPresets;
+  bed: Bed;
+  /** The plate of each object. */
+  plates: number[];
+  /** The colour of each filament slot. */
+  colours: string[];
+}
+
+/**
+ * Bambu Studio writes this version, and reads plates only from a project it
+ * thinks it wrote. Its own 3MFs say this; so must ours, or it loads geometry
+ * only (tested with Bambu Studio 2.8).
+ */
+const BAMBU_APPLICATION = "BambuStudio-02.08.02.61";
+
+/**
+ * The project settings: only the names of Bambu Studio's system presets and
+ * the filament colours. Bambu Studio fills every other setting from the named
+ * presets, so this carries no settings of its own and stays correct when
+ * Bambu updates them. The purge tower goes on the spot the layout kept clear.
+ */
+function bambuProjectSettings({ presets, bed, plates, colours }: BambuProject): string {
+  const count = Math.max(0, ...plates) + 1;
+  const tower = bed.exclude?.find((z) => z.kind === "tower");
+  return JSON.stringify(
+    {
+      name: "project_settings",
+      from: "project",
+      version: BAMBU_APPLICATION.slice("BambuStudio-".length),
+      printer_technology: "FFF",
+      printer_model: presets.model,
+      printer_settings_id: presets.printer,
+      printer_variant: "0.4",
+      print_settings_id: presets.process,
+      print_compatible_printers: [presets.printer],
+      filament_settings_id: colours.map(() => presets.filament),
+      filament_colour: colours,
+      filament_type: colours.map(() => "PLA"),
+      // Two-nozzle printers would need every per-nozzle list to match; leave those to the presets.
+      ...(presets.nozzles === 1 ? { nozzle_diameter: ["0.4"] } : {}),
+      ...(tower
+        ? {
+            wipe_tower_x: Array.from({ length: count }, () => String(tower.x + TOWER_BRIM)),
+            wipe_tower_y: Array.from({ length: count }, () => String(tower.y + TOWER_BRIM)),
+          }
+        : {}),
+    },
+    null,
+    4,
+  );
+}
+
+/** Which objects (by assembly id) go on which plate, for model_settings.config. */
+function bambuPlates(plates: number[], ids: { assembly: number }[]): string {
+  const count = Math.max(0, ...plates) + 1;
+  return Array.from({ length: count }, (_, n) => {
+    const instances = ids
+      .filter((_, i) => plates[i] === n)
+      .map(
+        ({ assembly }) => `  <model_instance>
+   <metadata key="object_id" value="${assembly}"/>
+   <metadata key="instance_id" value="0"/>
+  </model_instance>`,
+      )
+      .join("\n");
+    return ` <plate>
+  <metadata key="plater_id" value="${n + 1}"/>
+  <metadata key="plater_name" value=""/>
+  <metadata key="locked" value="false"/>
+${instances}
+ </plate>`;
+  }).join("\n");
+}
+
+function model3mf(
+  title: string,
+  objects: ExportObject[],
+  offsets: [number, number, number][],
+  slots: number[][],
+  project?: BambuProject,
+): Uint8Array {
   const allParts = objects.flatMap((o) => o.parts);
   const materials = allParts
     .map((p) => `<base name="${escapeXml(p.name)}" displaycolor="${p.color.toUpperCase()}FF"/>`)
@@ -168,14 +269,15 @@ export function to3mf(title: string, objects: ExportObject[]): Uint8Array {
     });
     const assembly = nextId++;
     const components = partIds.map((id) => `<component objectid="${id}"/>`).join("");
-    resources.push(`<object id="${assembly}" name="${escapeXml(o.name)}" type="model"><components>${components}</components></object>`);
+    resources.push(
+      `<object id="${assembly}" name="${escapeXml(o.name)}" type="model"><components>${components}</components></object>`,
+    );
     ids.push({ assembly, parts: partIds });
   }
 
-  const layout = plateLayout(objects);
   const items = ids
     .map(({ assembly }, i) => {
-      const [x, y, z] = layout[i].map((c) => c.toFixed(4));
+      const [x, y, z] = offsets[i].map((c) => c.toFixed(4));
       return `<item objectid="${assembly}" transform="1 0 0 0 1 0 0 0 1 ${x} ${y} ${z}"/>`;
     })
     .join("");
@@ -183,7 +285,12 @@ export function to3mf(title: string, objects: ExportObject[]): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <metadata name="Title">${escapeXml(title)}</metadata>
-<metadata name="Application">labels.vi-kan.net</metadata>
+${
+  project
+    ? `<metadata name="Application">${BAMBU_APPLICATION}</metadata>
+<metadata name="BambuStudio:3mfVersion">1</metadata>`
+    : `<metadata name="Application">labels.vi-kan.net</metadata>`
+}
 <resources><basematerials id="1">${materials}</basematerials>${resources.join("")}</resources>
 <build>${items}</build>
 </model>`;
@@ -199,7 +306,14 @@ export function to3mf(title: string, objects: ExportObject[]): Uint8Array {
 <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`),
     "3D/3dmodel.model": strToU8(model),
-    "Metadata/model_settings.config": strToU8(bambuModelSettings(objects, ids)),
+    "Metadata/model_settings.config": strToU8(
+      bambuModelSettings(objects, ids, slots, project ? bambuPlates(project.plates, ids) : ""),
+    ),
+    ...(project
+      ? {
+          "Metadata/project_settings.config": strToU8(bambuProjectSettings(project)),
+        }
+      : {}),
   });
 }
 

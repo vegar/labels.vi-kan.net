@@ -1,16 +1,19 @@
 import { useEffect, useRef } from "react";
+import type { Bed } from "../bed";
 import { Preview, type PreviewLabel, type RowLayout } from "../preview";
 
 interface Props {
   labels: PreviewLabel[];
   selected: string;
   layout: RowLayout;
+  /** Show the labels on this printer's plates instead of in a row. */
+  bed: Bed | null;
   /** Called when a label is clicked in the view. */
   onSelect: (id: string) => void;
 }
 
 /** React wrapper around the three.js preview. */
-export function PreviewCanvas({ labels, selected, layout, onSelect }: Props) {
+export function PreviewCanvas({ labels, selected, layout, bed, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const preview = useRef<Preview>(null);
   // The preview lives for the component's lifetime, so it calls the latest handler through a ref.
@@ -33,8 +36,8 @@ export function PreviewCanvas({ labels, selected, layout, onSelect }: Props) {
   }, []);
 
   useEffect(() => {
-    preview.current?.update(labels, selected, layout);
-  }, [labels, selected, layout]);
+    preview.current?.update(labels, selected, layout, bed);
+  }, [labels, selected, layout, bed]);
 
   return <div id="preview" ref={container} />;
 }
