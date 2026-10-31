@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packPlates, plateColumns, plateCount, plateOrigin, tooLarge } from "../src/bed";
+import { bedOf, packPlates, plateColumns, plateCount, plateOrigin, tooLarge } from "../src/bed";
 
 const bed = { width: 100, depth: 60 };
 const item = (width: number, depth = 10) => ({ width, depth });
@@ -91,5 +91,38 @@ describe("plateOrigin", () => {
     expect(plateOrigin(0, 3, bed)).toEqual([0, -0]);
     expect(plateOrigin(1, 3, bed)).toEqual([120, -0]);
     expect(plateOrigin(2, 3, bed)).toEqual([0, -72]);
+  });
+});
+
+describe("bedOf", () => {
+  const custom = { width: 256, depth: 256 };
+
+  it("keeps the purge tower's spot clear only with more than one colour", () => {
+    const h2s = { id: "bbl-h2s", custom };
+    expect(bedOf(h2s, false).exclude ?? []).toEqual([]);
+    expect(bedOf(h2s, true).exclude).toEqual([{ x: 165, y: 250, width: 66, depth: 66, kind: "tower" }]);
+  });
+
+  it("pulls the purge tower back onto a smaller plate", () => {
+    const [tower] = bedOf({ id: "bbl-a1mini", custom }, true).exclude!;
+    expect(tower).toEqual({ x: 0, y: 139, width: 41, depth: 41, kind: "tower" });
+  });
+
+  it("keeps labels off the purge tower", () => {
+    const bed = bedOf({ id: "bbl-h2s", custom }, true);
+    const tower = bed.exclude![0];
+    const placed = packPlates(
+      Array.from({ length: 70 }, (_, i) => item([36, 78, 120][i % 3], 11)),
+      bed,
+    );
+    for (const [i, p] of placed.entries()) {
+      const w = [36, 78, 120][i % 3];
+      const overlap =
+        p.x - w / 2 < tower.x + tower.width &&
+        p.x + w / 2 > tower.x &&
+        p.y - 5.5 < tower.y + tower.depth &&
+        p.y + 5.5 > tower.y;
+      expect(overlap).toBe(false);
+    }
   });
 });

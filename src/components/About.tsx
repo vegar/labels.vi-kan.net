@@ -95,7 +95,7 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "Printers and plates",
-    text: "Print areas and keep-clear zones (the purge corner on P1 and X1, the strips only one nozzle of an H2D, H2C or X2D reaches) come from the printer profiles in Bambu Studio and OrcaSlicer. Labels are kept clear of those zones. The plates in the bed view are drawn here rather than taken from the slicers, whose models are AGPL.",
+    text: "Print areas and keep-clear zones (the purge corner on P1 and X1, the strips only one nozzle of an H2D, H2C or X2D reaches) come from the printer profiles in Bambu Studio and OrcaSlicer. Labels are kept clear of those zones. With more than one colour, the purge tower's default spot (Bambu Studio's x 165, y 250, or the left edge on A1 printers) is kept clear too. The plates in the bed view are drawn here rather than taken from the slicers, whose models are AGPL.",
   },
   {
     title: "Colours in Bambu Studio and OrcaSlicer",

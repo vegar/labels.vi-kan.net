@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Bed } from "./bed";
+import type { Area, Bed } from "./bed";
 
 /** How far the sheet reaches past the print area, in mm. */
 const BORDER = 6;
@@ -47,6 +47,10 @@ export function plateModel(bed: Bed, index: number): THREE.Group {
   );
 
   for (const zone of bed.exclude ?? []) {
+    if (zone.kind === "tower") {
+      plate.add(towerModel(zone));
+      continue;
+    }
     const shade = new THREE.Mesh(
       new THREE.PlaneGeometry(zone.width, zone.depth),
       new THREE.MeshBasicMaterial({ map: hatchTexture(zone.width, zone.depth), transparent: true, depthWrite: false }),
@@ -63,6 +67,24 @@ export function plateModel(bed: Bed, index: number): THREE.Group {
   number.position.set(bed.width / 2, -FRONT_BORDER - TAB_DEPTH / 2 + 2, 0.03);
   plate.add(number);
   return plate;
+}
+
+/** How tall to draw the purge tower: only a hint, the real one is as tall as the labels. */
+const TOWER_HEIGHT = 6;
+const TOWER_COLOR = 0x9aa3ad;
+
+/** A translucent block where the slicer will put the purge tower. */
+function towerModel(zone: Area): THREE.Group {
+  const group = new THREE.Group();
+  const box = new THREE.BoxGeometry(zone.width, zone.depth, TOWER_HEIGHT);
+  const block = new THREE.Mesh(
+    box,
+    new THREE.MeshStandardMaterial({ color: TOWER_COLOR, transparent: true, opacity: 0.45, depthWrite: false }),
+  );
+  group.add(block);
+  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(box), new THREE.LineBasicMaterial({ color: TOWER_COLOR })));
+  group.position.set(zone.x + zone.width / 2, zone.y + zone.depth / 2, TOWER_HEIGHT / 2);
+  return group;
 }
 
 function lineSegments(points: number[], color: number): THREE.LineSegments {

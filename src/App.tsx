@@ -104,7 +104,17 @@ export function App() {
 
   // The printer's bed, to lay the labels out on in the preview and the 3MF.
   const [printer, setPrinter] = usePrinter();
-  const bed = useMemo(() => bedOf(printer), [printer.id, printer.custom.width, printer.custom.depth]);
+  // Each colour gets its own filament, so more than one means a purge tower.
+  const colours = new Set(
+    session.labels.flatMap((l) =>
+      [l.baseColor, ...l.segments.map((s) => segmentColor(l, s))].map((c) => c.toLowerCase()),
+    ),
+  );
+  const multiColour = colours.size > 1;
+  const bed = useMemo(
+    () => bedOf(printer, multiColour),
+    [printer.id, printer.custom.width, printer.custom.depth, multiColour],
+  );
   const [view, setView] = useState<"row" | "bed">("row");
   const footprints = useMemo(
     () =>

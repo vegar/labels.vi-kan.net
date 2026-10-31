@@ -6,6 +6,8 @@ export interface Area {
   y: number;
   width: number;
   depth: number;
+  /** What keeps it clear, when it isn't simply unprintable. */
+  kind?: "tower";
 }
 
 /** A printer's build plate, in mm. */
@@ -21,7 +23,19 @@ export interface Printer {
   vendor: string;
   name: string;
   bed: Bed;
+  /** Where the slicer puts the purge tower by default, its front-left corner, and its width. */
+  tower?: { x: number; y: number; width: number };
 }
+
+/**
+ * Bambu Studio's default purge tower: at x 165, y 250 (x 0 on bedslingers),
+ * as wide as the 0.20mm Standard process says, and square.
+ */
+const TOWER = { x: 165, y: 250, width: 35 };
+const WIDE_TOWER = { ...TOWER, width: 60 };
+const I3_TOWER = { ...TOWER, x: 0 };
+/** Room for the purge tower's brim. */
+const TOWER_BRIM = 3;
 
 /** The corner by the purge chute on P1 and X1 printers. */
 const PURGE_CORNER: Area = { x: 0, y: 0, width: 18, depth: 28 };
@@ -36,32 +50,59 @@ function oneNozzleStrip(x: number, width: number, depth: number): Area {
  * printer profiles that come with Bambu Studio and OrcaSlicer.
  */
 export const PRINTERS: Printer[] = [
-  { id: "bbl-a1mini", vendor: "Bambu Lab", name: "A1 mini", bed: { width: 180, depth: 180 } },
-  { id: "bbl-a1", vendor: "Bambu Lab", name: "A1", bed: { width: 256, depth: 256 } },
-  { id: "bbl-a2l", vendor: "Bambu Lab", name: "A2L", bed: { width: 330, depth: 320 } },
-  { id: "bbl-p1p", vendor: "Bambu Lab", name: "P1P", bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] } },
-  { id: "bbl-p1s", vendor: "Bambu Lab", name: "P1S", bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] } },
-  { id: "bbl-p2s", vendor: "Bambu Lab", name: "P2S", bed: { width: 256, depth: 256 } },
-  { id: "bbl-x1c", vendor: "Bambu Lab", name: "X1 Carbon", bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] } },
-  { id: "bbl-x1e", vendor: "Bambu Lab", name: "X1E", bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] } },
+  { id: "bbl-a1mini", vendor: "Bambu Lab", name: "A1 mini", bed: { width: 180, depth: 180 }, tower: I3_TOWER },
+  { id: "bbl-a1", vendor: "Bambu Lab", name: "A1", bed: { width: 256, depth: 256 }, tower: I3_TOWER },
+  { id: "bbl-a2l", vendor: "Bambu Lab", name: "A2L", bed: { width: 330, depth: 320 }, tower: I3_TOWER },
+  {
+    id: "bbl-p1p",
+    vendor: "Bambu Lab",
+    name: "P1P",
+    bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
+    tower: TOWER,
+  },
+  {
+    id: "bbl-p1s",
+    vendor: "Bambu Lab",
+    name: "P1S",
+    bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
+    tower: TOWER,
+  },
+  { id: "bbl-p2s", vendor: "Bambu Lab", name: "P2S", bed: { width: 256, depth: 256 }, tower: TOWER },
+  {
+    id: "bbl-x1c",
+    vendor: "Bambu Lab",
+    name: "X1 Carbon",
+    bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
+    tower: TOWER,
+  },
+  {
+    id: "bbl-x1e",
+    vendor: "Bambu Lab",
+    name: "X1E",
+    bed: { width: 256, depth: 256, exclude: [PURGE_CORNER] },
+    tower: TOWER,
+  },
   {
     id: "bbl-x2d",
     vendor: "Bambu Lab",
     name: "X2D",
     bed: { width: 256, depth: 256, exclude: [oneNozzleStrip(0, 20.5, 256)] },
+    tower: TOWER,
   },
-  { id: "bbl-h2s", vendor: "Bambu Lab", name: "H2S", bed: { width: 340, depth: 320 } },
+  { id: "bbl-h2s", vendor: "Bambu Lab", name: "H2S", bed: { width: 340, depth: 320 }, tower: WIDE_TOWER },
   {
     id: "bbl-h2c",
     vendor: "Bambu Lab",
     name: "H2C",
     bed: { width: 330, depth: 320, exclude: [oneNozzleStrip(0, 25, 320), oneNozzleStrip(325, 5, 320)] },
+    tower: WIDE_TOWER,
   },
   {
     id: "bbl-h2d",
     vendor: "Bambu Lab",
     name: "H2D / H2D Pro",
     bed: { width: 350, depth: 320, exclude: [oneNozzleStrip(0, 25, 320), oneNozzleStrip(325, 25, 320)] },
+    tower: WIDE_TOWER,
   },
   { id: "prusa-mini", vendor: "Prusa", name: "MINI+", bed: { width: 180, depth: 180 } },
   { id: "prusa-mk4", vendor: "Prusa", name: "MK4S / MK4", bed: { width: 250, depth: 210 } },
@@ -93,8 +134,25 @@ export function printerName(choice: PrinterChoice): string {
   return p ? `${p.vendor} ${p.name}` : "custom printer";
 }
 
-export function bedOf(choice: PrinterChoice): Bed {
-  return PRINTERS.find((p) => p.id === choice.id)?.bed ?? choice.custom;
+/**
+ * The plate to lay labels out on. With more than one colour the slicer adds
+ * a purge tower, so its default spot is kept clear too, pulled back onto the
+ * plate the way the slicer does on smaller beds.
+ */
+export function bedOf(choice: PrinterChoice, multiColour = false): Bed {
+  const printer = PRINTERS.find((p) => p.id === choice.id);
+  if (!printer) return choice.custom;
+  const { bed, tower } = printer;
+  if (!multiColour || !tower) return bed;
+  const size = tower.width + 2 * TOWER_BRIM;
+  const zone: Area = {
+    x: Math.min(tower.x, bed.width - size),
+    y: Math.min(tower.y, bed.depth - size),
+    width: size,
+    depth: size,
+    kind: "tower",
+  };
+  return { ...bed, exclude: [...(bed.exclude ?? []), zone] };
 }
 
 /** Gap between labels on a plate, in mm. */
@@ -178,14 +236,40 @@ function hitsZone(blocked: Area[], x: number, top: number, item: Footprint): Are
  * the front, then the next plate, keeping clear of the plate's keep-clear
  * zones. A footprint goes at the end of the first row it fits in, so short
  * ones fill the gaps earlier rows left. Labels are all about as deep, so rows
- * waste little space.
- * Each plate's layout is centred on the plate where that stays clear of
- * them. A footprint too large for the plate gets a plate of its own.
+ * waste little space. Each plate's layout is centred on the plate where that
+ * stays clear of the zones. A footprint too large for the plate gets a plate
+ * of its own.
  */
 export function packPlates(items: Footprint[], bed: Bed): Placement[] {
   const { area, blocked } = usableArea(bed);
-  // Back-left corners from the usable area's back-left corner, with y growing towards the front.
-  const placed: { plate: number; x: number; y: number }[] = [];
+  const packed = fillPlates(items, bed, area, blocked);
+  const placements: Placement[] = new Array(items.length);
+  for (let p = 0; p < plateCount(packed); p++) {
+    const on = packed.flatMap((q, i) => (q.plate === p ? [i] : []));
+    const mine = on.map((i) => items[i]);
+    // A plate with room to spare looks tidier packed as if the zones weren't
+    // there and then centred, when that happens to stay clear of them.
+    const loose = fillPlates(mine, bed, area, []);
+    const centred =
+      (plateCount(loose) === 1 && centre(loose, mine, area, blocked, true)) ||
+      centre(
+        on.map((i) => packed[i]),
+        mine,
+        area,
+        blocked,
+        false,
+      )!;
+    on.forEach((i, k) => (placements[i] = { plate: p, ...centred[k] }));
+  }
+  return placements;
+}
+
+/** Back-left corners from the usable area's back-left corner, with y growing towards the front. */
+type Packed = { plate: number; x: number; y: number };
+
+/** The packing itself, without centring; see packPlates. */
+function fillPlates(items: Footprint[], bed: Bed, area: Area, blocked: Area[]): Packed[] {
+  const placed: Packed[] = [];
   let plate = 0;
   /** The current plate's rows, back to front, each with where its next label would go. */
   let rows: { y: number; depth: number; x: number }[] = [];
@@ -233,32 +317,41 @@ export function packPlates(items: Footprint[], bed: Bed): Placement[] {
     spot.row.x = spot.x + item.width + PLATE_GAP;
     full = alone;
   }
+  return placed;
+}
 
-  const plates = plateCount(placed);
-  const shift = Array.from({ length: plates }, (_, p) => {
-    const on = placed.map((q, i) => ({ ...q, item: items[i] })).filter((q) => q.plate === p);
-    const width = Math.max(0, ...on.map((q) => q.x + q.item.width));
-    const depth = Math.max(0, ...on.map((q) => q.y + q.item.depth));
-    const dx = Math.max(0, (area.width - width) / 2);
-    const dy = Math.max(0, (area.depth - depth) / 2);
-    // Centre if that stays clear of the zones; the packed layout always does.
-    const candidates: [number, number][] = [
-      [dx, dy],
-      [dx, 0],
-      [0, dy],
-    ];
-    const clear = ([sx, sy]: [number, number]) =>
-      on.every((q) => !hitsZone(blocked, area.x + q.x + sx, area.y + area.depth - q.y - sy, q.item));
-    return candidates.find(clear) ?? [0, 0];
-  });
-  return placed.map((p, i) => {
-    const [sx, sy] = shift[p.plate];
-    return {
-      plate: p.plate,
-      x: area.x + sx + p.x + items[i].width / 2,
-      y: area.y + area.depth - sy - p.y - items[i].depth / 2,
-    };
-  });
+/**
+ * Centre one plate's packed layout on the plate, as far as that stays clear
+ * of the zones, as centres from the plate's front-left corner. When `strict`,
+ * give up rather than leave it uncentred or on a zone.
+ */
+function centre(
+  packed: Packed[],
+  items: Footprint[],
+  area: Area,
+  blocked: Area[],
+  strict: boolean,
+): { x: number; y: number }[] | undefined {
+  const width = Math.max(0, ...packed.map((q, i) => q.x + items[i].width));
+  const depth = Math.max(0, ...packed.map((q, i) => q.y + items[i].depth));
+  const dx = Math.max(0, (area.width - width) / 2);
+  const dy = Math.max(0, (area.depth - depth) / 2);
+  const candidates: [number, number][] = strict
+    ? [[dx, dy]]
+    : [
+        [dx, dy],
+        [dx, 0],
+        [0, dy],
+        [0, 0],
+      ];
+  const clear = ([sx, sy]: [number, number]) =>
+    packed.every((q, i) => !hitsZone(blocked, area.x + q.x + sx, area.y + area.depth - q.y - sy, items[i]));
+  const shift = candidates.find(clear) ?? (strict ? undefined : [0, 0]);
+  if (!shift) return undefined;
+  return packed.map((q, i) => ({
+    x: area.x + shift[0] + q.x + items[i].width / 2,
+    y: area.y + area.depth - shift[1] - q.y - items[i].depth / 2,
+  }));
 }
 
 export function plateCount(placements: { plate: number }[]): number {
