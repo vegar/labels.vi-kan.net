@@ -12,6 +12,7 @@ import { PreviewCanvas } from "./components/PreviewCanvas";
 import type { PreviewLabel, RowLayout } from "./preview";
 import { SidebarResizer, useSidebarWidth } from "./components/SidebarResizer";
 import { About } from "./components/About";
+import { Features } from "./components/Features";
 import { PrinterPicker, usePrinter } from "./components/PrinterPicker";
 import { Segmented } from "./components/Segmented";
 import { bambuPresets, bedOf, bounds, footprint, packPlates, plateCount, printerName, tooLarge } from "./bed";
@@ -72,8 +73,10 @@ export function App() {
   const update = (patch: Partial<LabelState>) => setSession((s) => updateLabel(s, state.id, patch));
 
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
-  // The about page covers the app instead of replacing it, so the preview keeps its camera.
-  const showAbout = useHash() === "#about";
+  // The about and features pages cover the app instead of replacing it, so the preview keeps its camera.
+  const hash = useHash();
+  const showAbout = hash === "#about";
+  const showFeatures = hash === "#features";
 
   const { engine, error: engineError } = useEngine();
   const builds = useLabels(engine, session.labels);
@@ -228,7 +231,7 @@ export function App() {
         <footer>
           Label geometry from <a href="https://github.com/ndevenish/gflabel">gflabel</a> (BSD-3). Cullenect system by{" "}
           <a href="https://makerworld.com/en/models/446624">Cullen J Webb</a>, pred labels by{" "}
-          <a href="https://www.printables.com/model/592545">pred</a>. <a href="#about">About</a>
+          <a href="https://www.printables.com/model/592545">pred</a>. <a href="#features">Features</a> · <a href="#about">About</a>
         </footer>
       </aside>
       <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />
@@ -288,6 +291,7 @@ export function App() {
         </div>
       </section>
       {showAbout && <About />}
+      {showFeatures && <Features />}
     </main>
   );
 }

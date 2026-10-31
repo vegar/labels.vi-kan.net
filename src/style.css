@@ -727,6 +727,55 @@ input[type="number"] {
   margin: 2px 0 0;
 }
 
+/* Features page: same look as About, with a contents row and the groups in two columns. */
+.feature-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 12px 0 4px;
+}
+
+.feature-toc a {
+  font-size: 0.85rem;
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.feature-groups {
+  columns: 2;
+  column-gap: 64px;
+  column-rule: 1px solid var(--border);
+}
+
+.feature-groups > section {
+  break-inside: avoid;
+  padding-top: 4px;
+}
+
+.features .feature-groups h2 {
+  margin: 24px 0 4px;
+}
+
+.features .feature-groups > section > .sub {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.features dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 800px) {
+  .feature-groups {
+    columns: 1;
+  }
+}
+
 /* ---- Sidebar: outline and property grid ---- */
 
 select {
