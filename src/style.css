@@ -274,7 +274,11 @@ footer a {
 .status {
   position: absolute;
   left: 16px;
+  right: 16px;
   bottom: 12px;
+  /* Spans the viewer's width so the controls can wrap; let drags on the
+     empty part fall through to the canvas. */
+  pointer-events: none;
   font-size: 0.8rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -282,9 +286,18 @@ footer a {
 
 .row-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
-  gap: 16px;
+  gap: 8px 16px;
   margin-bottom: 8px;
+}
+
+.row-controls > * {
+  pointer-events: auto;
+}
+
+.row-controls .segmented button {
+  white-space: nowrap;
 }
 
 .row-controls label {
@@ -292,6 +305,7 @@ footer a {
   flex-direction: column;
   gap: 2px;
   width: 160px;
+  max-width: 100%;
 }
 
 .row-controls output {
