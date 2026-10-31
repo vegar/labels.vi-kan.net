@@ -46,7 +46,7 @@ export function cloneColumns(segments: Segment[]): CloneColumn[] {
       const options = info.headShapes.map((h) => ({ value: h as string, label: HEAD_LABELS[h] }));
       columns.push({ segment, field: "head", title: `${name} head`, options });
     }
-    if (info.drives && (seg.view !== "side" || seg.style === "cullenect")) {
+    if (info.drives && seg.view !== "side") {
       const options = isScrew ? [...DRIVE_OPTIONS, { value: "hexhead", label: "Hex head bolt" }] : DRIVE_OPTIONS;
       columns.push({ segment, field: "drive", title: `${name} drive`, options });
     }
