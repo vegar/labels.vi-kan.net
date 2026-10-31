@@ -84,7 +84,7 @@ export function PrinterPicker({ choice, onChange, plates, tooLarge }: Props) {
           ? `${tooLarge === 1 ? "One label is" : `${tooLarge} labels are`} larger than the plate.`
           : plates === 1
             ? "Fits on one plate."
-            : `Needs ${plates} plates. The 3MF puts the rest beside the first plate, where a slicer adds its next plates.`}
+            : `Needs ${plates} plates. Download 3MF gives a zip with one 3MF per plate.`}
       </small>
     </div>
   );

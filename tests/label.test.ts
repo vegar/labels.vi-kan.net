@@ -6,7 +6,7 @@ import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import { buildByKind } from "./parts";
 import { loadManifold } from "../src/manifold";
 import { DEFAULT_OPTIONS, maxEmbeddedDepth, textSegment } from "../src/label";
-import { plateLayout, to3mf, toStl, toStlZip } from "../src/export";
+import { export3mf, plateLayout, to3mf, toStl, toStlZip } from "../src/export";
 
 const BED = { width: 256, depth: 256 };
 
@@ -227,7 +227,8 @@ describe("export", () => {
     const layout = plateLayout(labels, BED);
     const boxes = labels.map((l, i) => {
       const b = l.parts[0].manifold.boundingBox();
-      const [x, y, z] = layout[i];
+      const [x, y, z] = layout[i].offset;
+      expect(layout[i].plate).toBe(0);
       expect(b.min[2] + z).toBeCloseTo(0, 6);
       return { minX: b.min[0] + x, maxX: b.max[0] + x, minY: b.min[1] + y, maxY: b.max[1] + y };
     });
@@ -248,22 +249,56 @@ describe("export", () => {
     }
   });
 
-  it("puts labels that don't fit where Bambu Studio's second plate goes", () => {
-    const { base } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, segments: [], units: 3 });
+  it("downloads a zip with a 3MF per plate when the labels need several", () => {
+    const { base, text } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, units: 3 });
     const labels = Array.from({ length: 12 }, (_, i) => ({
       name: `l${i}`,
-      parts: [{ name: "label", manifold: base, color: "#202020" }],
+      parts: [
+        { name: "label", manifold: base, color: "#202020" },
+        // Only the last label has red text: it keeps slot 3 in its own plate's file.
+        { name: "text", manifold: text!, color: i === 11 ? "#ff0000" : "#ffffff" },
+      ],
     }));
-    // A 120 mm label: one column of 5 on a 100 mm deep, 130 mm wide plate.
+    // 120 mm labels: one per row, five rows on a 100 mm deep, 130 mm wide plate.
     const bed = { width: 130, depth: 100 };
-    const layout = plateLayout(labels, bed);
+    expect(plateLayout(labels, bed).map((l) => l.plate)).toEqual([0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2]);
+
+    const file = export3mf("labels", labels, bed);
+    expect(file.filename).toBe("labels-3-plates.zip");
+    const plates = unzipSync(file.data);
+    expect(Object.keys(plates).sort()).toEqual(["labels-plate-1.3mf", "labels-plate-2.3mf", "labels-plate-3.3mf"]);
     const b = base.boundingBox();
-    const xs = layout.map(([x]) => b.min[0] + x);
-    expect(xs.slice(0, 5).every((x) => x > 0 && x + 120 < 130)).toBe(true);
-    // Three plates sit in a 2-wide grid, the second 1.2 plate widths to the right.
-    expect(xs.slice(5, 10).every((x) => x > 156 && x + 120 < 156 + 130)).toBe(true);
-    const ys = layout.map(([, y]) => b.min[1] + y);
-    expect(ys.slice(10).every((y) => y > -120 && y < -20)).toBe(true);
+    for (const name of Object.keys(plates)) {
+      const files = unzipSync(plates[name]);
+      const model = strFromU8(files["3D/3dmodel.model"]);
+      // Every label in each file lies on the bed.
+      for (const [, x, y] of model.matchAll(/transform="1 0 0 0 1 0 0 0 1 ([-\d.]+) ([-\d.]+)/g)) {
+        expect(b.min[0] + Number(x)).toBeGreaterThan(0);
+        expect(b.max[0] + Number(x)).toBeLessThan(130);
+        expect(b.min[1] + Number(y)).toBeGreaterThan(0);
+        expect(b.max[1] + Number(y)).toBeLessThan(100);
+      }
+    }
+    const last = strFromU8(unzipSync(plates["labels-plate-3.3mf"])["Metadata/model_settings.config"]);
+    expect([...last.matchAll(/key="extruder" value="(\d+)"/g)].map((m) => m[1])).toEqual([
+      "1",
+      "1",
+      "2",
+      "1",
+      "1",
+      "3",
+    ]);
+  });
+
+  it("downloads a single 3MF when the labels fit on one plate", () => {
+    const { base } = buildByKind(wasm, fonts, { ...DEFAULT_OPTIONS, segments: [] });
+    const file = export3mf(
+      "label-M3",
+      [{ name: "l", parts: [{ name: "label", manifold: base, color: "#202020" }] }],
+      BED,
+    );
+    expect(file.filename).toBe("label-M3.3mf");
+    expect(unzipSync(file.data)["3D/3dmodel.model"]).toBeDefined();
   });
 
   it("zips STLs in a folder per label, numbering repeated names", () => {

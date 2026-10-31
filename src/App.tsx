@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { baseInfo } from "./bases";
 import type { Manifold } from "manifold-3d";
-import { to3mf, toStlZip, type ExportObject, type ExportPart } from "./export";
+import { export3mf, toStlZip, type ExportObject, type ExportPart } from "./export";
 import { maxEmbeddedDepth, type LabelParts } from "./label";
 import type { Engine } from "./useEngine";
 import { fileName, loadSession, segmentColor, saveSession, updateLabel, type LabelState, type Session } from "./state";
@@ -155,7 +155,7 @@ export function App() {
   const canExport = !!engine && session.labels.every((label) => builds.get(label.id)?.parts);
   const count = session.labels.length;
   const exportName = count === 1 ? fileName(state) : `labels-${count}`;
-  const labelCount = count === 1 ? "" : ` (${count} labels)`;
+  const labelCount = count === 1 ? "" : plates === 1 ? ` (${count} labels)` : ` (${count} labels, ${plates} plates)`;
 
   const exportButtons = (
     <>
@@ -173,7 +173,10 @@ export function App() {
         className="primary"
         disabled={!canExport}
         onClick={() =>
-          withExportObjects((objects) => download(to3mf(exportName, objects, bed), `${exportName}.3mf`, "model/3mf"))
+          withExportObjects((objects) => {
+            const file = export3mf(exportName, objects, bed);
+            download(file.data, file.filename, file.type);
+          })
         }
       >
         Download 3MF{labelCount}

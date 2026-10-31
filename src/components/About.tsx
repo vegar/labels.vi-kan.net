@@ -91,7 +91,7 @@ const CHOICES: { title: string; text: ReactNode }[] = [
   },
   {
     title: "More than one plate",
-    text: "Labels that don't fit go where Bambu Studio and OrcaSlicer put the next plates, a fifth of a plate apart in a square-ish grid. The file carries no printer settings, so your own presets stay as they are.",
+    text: "Labels that don't fit go on the next plate, and the download becomes a zip with one 3MF per plate. Slicers centre a 3MF that isn't their own project on the plate as a whole, so plates can't share one file. A colour keeps the same filament slot in every file. The files carry no printer settings, so your own presets stay as they are.",
   },
   {
     title: "Printers and plates",

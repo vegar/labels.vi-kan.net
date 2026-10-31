@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import type { Manifold } from "manifold-3d";
-import { bounds, footprint, packPlates, plateCount, plateOrigin, type Bed } from "./bed";
+import { bounds, footprint, packPlates, plateCount, type Bed } from "./bed";
 
 export interface ExportPart {
   name: string;
@@ -51,19 +51,14 @@ function filamentSlots(objects: ExportObject[]): number[][] {
 }
 
 /**
- * Where each object goes, as a translation: packed onto as many plates as
- * the bed needs (see packPlates), and the plates spread out the way Bambu
- * Studio and OrcaSlicer place them. Those slicers only load plates from
- * their own project files, so the labels past the first plate land beside it.
+ * Which plate each object goes on and where, as a translation on that plate:
+ * packed onto as many plates as the bed needs (see packPlates).
  */
-export function plateLayout(objects: ExportObject[], bed: Bed): [number, number, number][] {
+export function plateLayout(objects: ExportObject[], bed: Bed): { plate: number; offset: [number, number, number] }[] {
   const boxes = objects.map((o) => bounds(o.parts.map((p) => p.manifold)));
-  const placements = packPlates(boxes.map(footprint), bed);
-  const count = plateCount(placements);
-  return placements.map((p, i) => {
+  return packPlates(boxes.map(footprint), bed).map((p, i) => {
     const b = boxes[i];
-    const [ox, oy] = plateOrigin(p.plate, count, bed);
-    return [ox + p.x - (b.min[0] + b.max[0]) / 2, oy + p.y - (b.min[1] + b.max[1]) / 2, -b.min[2]];
+    return { plate: p.plate, offset: [p.x - (b.min[0] + b.max[0]) / 2, p.y - (b.min[1] + b.max[1]) / 2, -b.min[2]] };
   });
 }
 
@@ -73,8 +68,11 @@ export function plateLayout(objects: ExportObject[], bed: Bed): [number, number,
  * part names and filament ("extruder") assignments from it. Object ids are the
  * assembly ids and part ids are the component object ids.
  */
-function bambuModelSettings(objects: ExportObject[], ids: { assembly: number; parts: number[] }[]): string {
-  const slots = filamentSlots(objects);
+function bambuModelSettings(
+  objects: ExportObject[],
+  ids: { assembly: number; parts: number[] }[],
+  slots: number[][],
+): string {
   const body = objects
     .map((o, i) => {
       const volumes = o.parts
@@ -99,12 +97,60 @@ ${body}
 }
 
 /**
- * Build a core-spec 3MF holding one object per label, laid out on a plate.
+ * Build a core-spec 3MF holding one object per label, laid out on one plate.
  * Each object is made of several parts, each with its own colour, so slicers
  * open it with one part per colour; Bambu Studio and OrcaSlicer also get each
  * colour on its own filament slot, shared across all labels.
  */
 export function to3mf(title: string, objects: ExportObject[], bed: Bed): Uint8Array {
+  const layout = plateLayout(objects, bed);
+  return model3mf(
+    title,
+    objects,
+    layout.map((l) => l.offset),
+    filamentSlots(objects),
+  );
+}
+
+/** A file to download. */
+export interface Download {
+  filename: string;
+  data: Uint8Array;
+  type: string;
+}
+
+/**
+ * The labels as one 3MF, or, when they need more than one plate, a zip with a
+ * 3MF per plate. Slicers centre a 3MF that isn't their own project on the
+ * plate as a whole, so plates can't share a file. Filament slots are numbered
+ * across all labels, so a colour has the same slot in every file.
+ */
+export function export3mf(title: string, objects: ExportObject[], bed: Bed): Download {
+  const layout = plateLayout(objects, bed);
+  const slots = filamentSlots(objects);
+  const plates = plateCount(layout);
+  const plate = (n: number) => {
+    const on = layout.flatMap((l, i) => (l.plate === n ? [i] : []));
+    return model3mf(
+      plates === 1 ? title : `${title} plate ${n + 1}`,
+      on.map((i) => objects[i]),
+      on.map((i) => layout[i].offset),
+      on.map((i) => slots[i]),
+    );
+  };
+  if (plates === 1) return { filename: `${title}.3mf`, data: plate(0), type: "model/3mf" };
+  const files: Record<string, Uint8Array> = {};
+  for (let n = 0; n < plates; n++) files[`${title}-plate-${n + 1}.3mf`] = plate(n);
+  // 3MFs are zips already; storing them again saves time and gains nothing.
+  return { filename: `${title}-${plates}-plates.zip`, data: zipSync(files, { level: 0 }), type: "application/zip" };
+}
+
+function model3mf(
+  title: string,
+  objects: ExportObject[],
+  offsets: [number, number, number][],
+  slots: number[][],
+): Uint8Array {
   const allParts = objects.flatMap((o) => o.parts);
   const materials = allParts
     .map((p) => `<base name="${escapeXml(p.name)}" displaycolor="${p.color.toUpperCase()}FF"/>`)
@@ -131,10 +177,9 @@ export function to3mf(title: string, objects: ExportObject[], bed: Bed): Uint8Ar
     ids.push({ assembly, parts: partIds });
   }
 
-  const layout = plateLayout(objects, bed);
   const items = ids
     .map(({ assembly }, i) => {
-      const [x, y, z] = layout[i].map((c) => c.toFixed(4));
+      const [x, y, z] = offsets[i].map((c) => c.toFixed(4));
       return `<item objectid="${assembly}" transform="1 0 0 0 1 0 0 0 1 ${x} ${y} ${z}"/>`;
     })
     .join("");
@@ -158,7 +203,7 @@ export function to3mf(title: string, objects: ExportObject[], bed: Bed): Uint8Ar
 <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`),
     "3D/3dmodel.model": strToU8(model),
-    "Metadata/model_settings.config": strToU8(bambuModelSettings(objects, ids)),
+    "Metadata/model_settings.config": strToU8(bambuModelSettings(objects, ids, slots)),
   });
 }
 
